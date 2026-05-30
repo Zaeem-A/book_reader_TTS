@@ -1,0 +1,16 @@
+# uploaded books / test files
+*.docx
+*.doc
+*.epub
+*.pdf
+*.~lock.*
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# editor
+.vscode/
+*.swp

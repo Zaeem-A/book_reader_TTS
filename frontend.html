@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>reader.</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #13120f;
+            --surface: #1c1a16;
+            --surface-2: #25221c;
+            --border: #2a2720;
+            --border-strong: #3a3528;
+            --text: #e2d9c8;
+            --text-dim: #7a7060;
+            --text-faint: #5a5142;
+            --highlight: #f5c842;
+            --highlight-bg: rgba(245, 200, 66, 0.18);
+            --accent: #c17d3c;
+            --accent-soft: rgba(193, 125, 60, 0.16);
+            --danger: #c46b6b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'DM Sans', sans-serif;
+            overflow: hidden;
+        }
+        button { font-family: inherit; cursor: pointer; }
+
+        .view {
+            display: none;
+            flex-direction: column;
+            height: 100dvh;
+            max-width: 720px;
+            margin: 0 auto;
+        }
+        .view.active { display: flex; }
+
+        /* ---------- Library ---------- */
+        .lib-header {
+            padding: 24px 24px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+        }
+        .logo {
+            font-family: 'Lora', serif;
+            font-size: 1.6rem;
+            color: var(--accent);
+            letter-spacing: -0.02em;
+        }
+        .add-btn {
+            background: var(--accent);
+            border: none;
+            color: #fff;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            font-size: 1.4rem;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding-bottom: 2px;
+        }
+
+        .lib-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 20px 32px;
+        }
+
+        .lib-empty {
+            text-align: center;
+            color: var(--text-dim);
+            padding: 80px 24px;
+            font-family: 'Lora', serif;
+            font-style: italic;
+            font-size: 1.05rem;
+            line-height: 1.6;
+        }
+        .lib-empty .small {
+            font-family: 'DM Sans', sans-serif;
+            font-style: normal;
+            font-size: 0.85rem;
+            color: var(--text-faint);
+            margin-top: 8px;
+        }
+
+        .tile {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 18px;
+            margin-bottom: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            position: relative;
+            transition: border-color 0.15s, background 0.15s;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        .tile.ready { cursor: pointer; }
+        .tile.ready:hover { border-color: var(--border-strong); background: var(--surface-2); }
+        .tile.failed { border-color: rgba(196, 107, 107, 0.4); }
+
+        .tile-title {
+            font-family: 'Lora', serif;
+            font-size: 1.05rem;
+            color: var(--text);
+            line-height: 1.3;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+        .tile-meta {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .tile-meta .dot { color: var(--text-faint); }
+        .tile-voice {
+            color: var(--accent);
+            font-weight: 500;
+        }
+        .tile-progress-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .tile-progress-label {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            display: flex;
+            justify-content: space-between;
+        }
+        .tile-progress-bar {
+            width: 100%;
+            height: 3px;
+            background: var(--border);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .tile-progress-fill {
+            height: 100%;
+            background: var(--accent);
+            width: 0%;
+            transition: width 0.4s linear;
+        }
+        .tile-error {
+            font-size: 0.78rem;
+            color: var(--danger);
+            line-height: 1.5;
+        }
+
+        /* ---------- Context menu ---------- */
+        .ctx-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: none;
+        }
+        .ctx-overlay.open { display: block; }
+        .ctx-menu {
+            position: absolute;
+            background: var(--surface-2);
+            border: 1px solid var(--border-strong);
+            border-radius: 10px;
+            padding: 6px;
+            min-width: 180px;
+            box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+        }
+        .ctx-item {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 0.9rem;
+            padding: 10px 12px;
+            border-radius: 6px;
+        }
+        .ctx-item:hover { background: var(--border); }
+        .ctx-item.danger { color: var(--danger); }
+
+        /* ---------- Voice picker ---------- */
+        .vp-header {
+            padding: 20px 20px 16px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-shrink: 0;
+        }
+        .back-btn {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 1.4rem;
+            line-height: 1;
+            padding: 4px 8px 4px 0;
+        }
+        .vp-title {
+            font-family: 'Lora', serif;
+            font-size: 1.2rem;
+            color: var(--text);
+        }
+        .vp-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-top: 2px;
+        }
+        .vp-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 20px 20px;
+        }
+
+        .voice-card {
+            background: var(--surface);
+            border: 1.5px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .voice-card.used {
+            border-color: rgba(193, 125, 60, 0.45);
+            background: var(--accent-soft);
+        }
+        .voice-card.selected {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px var(--accent) inset;
+        }
+        .voice-play {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--surface-2);
+            border: 1px solid var(--border-strong);
+            color: var(--text);
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            padding-left: 2px;
+        }
+        .voice-card.used .voice-play {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .voice-card.playing .voice-play {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .voice-info { flex: 1; min-width: 0; }
+        .voice-name {
+            font-size: 0.98rem;
+            color: var(--text);
+            font-weight: 500;
+        }
+        .voice-desc {
+            font-size: 0.78rem;
+            color: var(--text-dim);
+            margin-top: 2px;
+        }
+        .voice-badge {
+            font-size: 0.7rem;
+            color: var(--accent);
+            margin-top: 4px;
+            letter-spacing: 0.04em;
+        }
+        .voice-radio {
+            width: 18px;
+            height: 18px;
+            border: 1.5px solid var(--border-strong);
+            border-radius: 50%;
+            flex-shrink: 0;
+            position: relative;
+        }
+        .voice-card.selected .voice-radio {
+            border-color: var(--accent);
+        }
+        .voice-card.selected .voice-radio::after {
+            content: '';
+            position: absolute;
+            inset: 3px;
+            background: var(--accent);
+            border-radius: 50%;
+        }
+
+        .vp-footer {
+            padding: 16px 20px 28px;
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .vp-eta {
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+            min-height: 1.2em;
+        }
+        .vp-submit {
+            width: 100%;
+            padding: 15px;
+            background: var(--accent);
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 500;
+            opacity: 0.35;
+            transition: opacity 0.15s;
+        }
+        .vp-submit.ready { opacity: 1; }
+
+        /* ---------- Reader ---------- */
+        .reader-header {
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            gap: 10px;
+        }
+        .doc-title {
+            font-family: 'Lora', serif;
+            font-size: 0.95rem;
+            color: var(--text);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+            text-align: center;
+        }
+        .page-indicator {
+            font-size: 0.72rem;
+            color: var(--text-faint);
+            font-variant-numeric: tabular-nums;
+            min-width: 56px;
+            text-align: right;
+        }
+
+        .reading-area {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            padding: 28px 24px 8px;
+            line-height: 2.1;
+            font-family: 'Lora', serif;
+            font-size: 1.12rem;
+            color: var(--text);
+        }
+        .page {
+            display: none;
+            height: 100%;
+            overflow-y: auto;
+        }
+        .page.current { display: block; }
+        .word {
+            display: inline;
+            border-radius: 3px;
+            padding: 1px 2px;
+            transition: background 0.08s, color 0.08s;
+            cursor: pointer;
+        }
+        .word.active {
+            background: var(--highlight-bg);
+            color: var(--highlight);
+        }
+
+        .page-nav {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 20px 0;
+            flex-shrink: 0;
+        }
+        .page-arrow {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 1.1rem;
+            padding: 6px 10px;
+            border-radius: 6px;
+        }
+        .page-arrow:disabled { color: var(--text-faint); opacity: 0.4; }
+
+        .controls {
+            padding: 12px 20px 32px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            flex-shrink: 0;
+            background: var(--bg);
+        }
+        .progress-bar {
+            width: 100%;
+            height: 3px;
+            background: var(--border);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            width: 0%;
+            pointer-events: none;
+        }
+        .control-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .speed-btns { display: flex; gap: 6px; }
+        .speed-btn {
+            padding: 7px 13px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 7px;
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            transition: all 0.15s;
+        }
+        .speed-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .play-pause {
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            background: var(--accent);
+            border: none;
+            color: #fff;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .time-display {
+            font-size: 0.78rem;
+            color: var(--text-dim);
+            font-variant-numeric: tabular-nums;
+            min-width: 88px;
+            text-align: right;
+        }
+
+        /* ---------- Modal ---------- */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 200;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: var(--surface-2);
+            border: 1px solid var(--border-strong);
+            border-radius: 14px;
+            padding: 22px;
+            max-width: 360px;
+            width: 100%;
+        }
+        .modal h3 {
+            font-family: 'Lora', serif;
+            font-size: 1.15rem;
+            margin-bottom: 12px;
+            color: var(--text);
+        }
+        .modal p {
+            font-size: 0.88rem;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+        .modal input {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border-strong);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.95rem;
+            padding: 11px 14px;
+            margin-bottom: 16px;
+        }
+        .modal input:focus { outline: none; border-color: var(--accent); }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        .modal-btn {
+            background: var(--surface);
+            border: 1px solid var(--border-strong);
+            color: var(--text);
+            font-size: 0.88rem;
+            padding: 9px 16px;
+            border-radius: 7px;
+        }
+        .modal-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .modal-btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+    </style>
+</head>
+
+<body>
+
+    <!-- LIBRARY -->
+    <div id="library" class="view active">
+        <div class="lib-header">
+            <div class="logo">reader.</div>
+            <button class="add-btn" id="addBtn" title="Add book">+</button>
+        </div>
+        <div class="lib-body" id="libBody"></div>
+    </div>
+
+    <!-- VOICE PICKER -->
+    <div id="voicepicker" class="view">
+        <div class="vp-header">
+            <button class="back-btn" id="vpBack">←</button>
+            <div>
+                <div class="vp-title" id="vpTitle">Choose voice</div>
+                <div class="vp-subtitle" id="vpSubtitle"></div>
+            </div>
+        </div>
+        <div class="vp-body" id="vpBody"></div>
+        <div class="vp-footer">
+            <div class="vp-eta" id="vpEta"></div>
+            <button class="vp-submit" id="vpSubmit">Continue</button>
+        </div>
+    </div>
+
+    <!-- READER -->
+    <div id="reader" class="view">
+        <div class="reader-header">
+            <button class="back-btn" id="readerBack">←</button>
+            <span class="doc-title" id="docTitle">—</span>
+            <span class="page-indicator" id="pageIndicator">— / —</span>
+        </div>
+        <div class="reading-area" id="readingArea"></div>
+        <div class="page-nav">
+            <button class="page-arrow" id="prevPageBtn">‹ Prev page</button>
+            <button class="page-arrow" id="nextPageBtn">Next page ›</button>
+        </div>
+        <div class="controls">
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="control-row">
+                <div class="speed-btns">
+                    <button class="speed-btn active" data-speed="1">1×</button>
+                    <button class="speed-btn" data-speed="1.5">1.5×</button>
+                    <button class="speed-btn" data-speed="2">2×</button>
+                </div>
+                <button class="play-pause" id="playPauseBtn">▶</button>
+                <div class="time-display" id="timeDisplay">0:00 / 0:00</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context menu -->
+    <div class="ctx-overlay" id="ctxOverlay">
+        <div class="ctx-menu" id="ctxMenu"></div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal" id="modal"></div>
+    </div>
+
+    <input type="file" id="fileInput" accept=".txt,.docx,.doc,.epub" style="display:none">
+    <audio id="audio"></audio>
+    <audio id="sampleAudio"></audio>
+
+    <script>
+        // ---------- voice metadata ----------
+        const VOICE_META = {
+            "af_heart":   {name: "Heart",   desc: "American  •  Female"},
+            "af_bella":   {name: "Bella",   desc: "American  •  Female"},
+            "af_nicole":  {name: "Nicole",  desc: "American  •  Female"},
+            "af_sarah":   {name: "Sarah",   desc: "American  •  Female"},
+            "am_adam":    {name: "Adam",    desc: "American  •  Male"},
+            "am_michael": {name: "Michael", desc: "American  •  Male"},
+            "bf_emma":    {name: "Emma",    desc: "British  •  Female"},
+            "bm_george":  {name: "George",  desc: "British  •  Male"},
+        };
+
+        // ---------- helpers ----------
+        function fmt(s) {
+            if (!isFinite(s) || s < 0) s = 0;
+            const m = Math.floor(s / 60);
+            const sec = Math.floor(s % 60);
+            return m + ":" + String(sec).padStart(2, '0');
+        }
+        function fmtETA(s) {
+            if (!isFinite(s) || s <= 0) return "any moment";
+            if (s < 60) return `≈ ${Math.ceil(s)}s`;
+            const m = Math.floor(s / 60);
+            const r = Math.floor(s % 60);
+            return r === 0 ? `≈ ${m}m` : `≈ ${m}m ${r}s`;
+        }
+        function api(path, opts) {
+            return fetch(path, opts).then(r => {
+                if (!r.ok) return r.json().then(j => Promise.reject(j.error || r.statusText));
+                return r.json();
+            });
+        }
+        function showView(name) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(name).classList.add('active');
+        }
+
+        // ---------- library ----------
+        let books = [];
+        let voices = [];
+        let pollTimer = null;
+
+        async function refreshLibrary() {
+            try {
+                books = await api('/api/books');
+            } catch (e) { console.error(e); return; }
+            renderLibrary();
+            const anyProcessing = books.some(b => b.status === 'processing');
+            if (anyProcessing && !pollTimer) {
+                pollTimer = setInterval(refreshLibrary, 2000);
+            } else if (!anyProcessing && pollTimer) {
+                clearInterval(pollTimer); pollTimer = null;
+            }
+        }
+
+        function tileProgress(book) {
+            if (!book.eta_seconds || !book.processing_started_at) return 0;
+            const elapsed = (Date.now() / 1000) - book.processing_started_at;
+            return Math.max(0, Math.min(0.98, elapsed / book.eta_seconds));
+        }
+        function tileRemaining(book) {
+            if (!book.eta_seconds || !book.processing_started_at) return null;
+            const elapsed = (Date.now() / 1000) - book.processing_started_at;
+            return Math.max(0, book.eta_seconds - elapsed);
+        }
+
+        function renderLibrary() {
+            const body = document.getElementById('libBody');
+            if (books.length === 0) {
+                body.innerHTML = `
+                    <div class="lib-empty">
+                        Your library is empty.
+                        <div class="small">Tap + to add a book.</div>
+                    </div>`;
+                return;
+            }
+            body.innerHTML = books.map(b => {
+                const voice = VOICE_META[b.voice]?.name || b.voice;
+                if (b.status === 'processing') {
+                    const pct = (tileProgress(b) * 100).toFixed(0);
+                    const rem = tileRemaining(b);
+                    return `
+                    <div class="tile processing" data-id="${b.id}">
+                        <div class="tile-title">${escapeHtml(b.title)}</div>
+                        <div class="tile-meta">
+                            <span class="tile-voice">${voice}</span>
+                            <span class="dot">•</span>
+                            <span>${(b.word_count || 0).toLocaleString()} words</span>
+                        </div>
+                        <div class="tile-progress-wrap">
+                            <div class="tile-progress-label">
+                                <span>Generating…</span>
+                                <span>${fmtETA(rem)}</span>
+                            </div>
+                            <div class="tile-progress-bar">
+                                <div class="tile-progress-fill" style="width:${pct}%"></div>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+                if (b.status === 'failed') {
+                    return `
+                    <div class="tile failed" data-id="${b.id}">
+                        <div class="tile-title">${escapeHtml(b.title)}</div>
+                        <div class="tile-meta">
+                            <span class="tile-voice">${voice}</span>
+                            <span class="dot">•</span>
+                            <span>Failed</span>
+                        </div>
+                        <div class="tile-error">${escapeHtml(b.error || 'Generation failed')}</div>
+                    </div>`;
+                }
+                const mins = b.total_duration ? Math.round(b.total_duration / 60) : 0;
+                return `
+                <div class="tile ready" data-id="${b.id}">
+                    <div class="tile-title">${escapeHtml(b.title)}</div>
+                    <div class="tile-meta">
+                        <span class="tile-voice">${voice}</span>
+                        <span class="dot">•</span>
+                        <span>${(b.word_count || 0).toLocaleString()} words</span>
+                        <span class="dot">•</span>
+                        <span>${mins} min</span>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c =>
+                ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
+        // ---------- tile interactions ----------
+        document.getElementById('libBody').addEventListener('click', e => {
+            const tile = e.target.closest('.tile');
+            if (!tile || !tile.classList.contains('ready')) return;
+            openReader(parseInt(tile.dataset.id));
+        });
+
+        document.getElementById('libBody').addEventListener('contextmenu', e => {
+            const tile = e.target.closest('.tile');
+            if (!tile) return;
+            e.preventDefault();
+            openContextMenu(parseInt(tile.dataset.id), e.clientX, e.clientY);
+        });
+
+        // long-press on touch
+        let lpTimer = null;
+        let lpTouch = null;
+        document.getElementById('libBody').addEventListener('touchstart', e => {
+            const tile = e.target.closest('.tile');
+            if (!tile) return;
+            lpTouch = e.touches[0];
+            lpTimer = setTimeout(() => {
+                openContextMenu(parseInt(tile.dataset.id), lpTouch.clientX, lpTouch.clientY);
+                lpTimer = null;
+            }, 480);
+        }, {passive: true});
+        ['touchend','touchcancel','touchmove','scroll'].forEach(evt =>
+            document.getElementById('libBody').addEventListener(evt, () => {
+                if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+            }, {passive: true})
+        );
+
+        // ---------- context menu ----------
+        function openContextMenu(bookId, x, y) {
+            const book = books.find(b => b.id === bookId);
+            if (!book) return;
+            const menu = document.getElementById('ctxMenu');
+            const items = [
+                {label: 'Rename', action: () => renameBook(book)},
+                {label: 'Change voice', action: () => openChangeVoice(book)},
+                {label: 'Delete', cls: 'danger', action: () => deleteBook(book)},
+            ];
+            menu.innerHTML = items.map((it, i) =>
+                `<button class="ctx-item ${it.cls || ''}" data-i="${i}">${it.label}</button>`
+            ).join('');
+            menu.querySelectorAll('.ctx-item').forEach((el, i) => {
+                el.onclick = () => { closeContextMenu(); items[i].action(); };
+            });
+            const overlay = document.getElementById('ctxOverlay');
+            overlay.classList.add('open');
+            // position
+            requestAnimationFrame(() => {
+                const w = menu.offsetWidth, h = menu.offsetHeight;
+                const px = Math.min(x, window.innerWidth - w - 12);
+                const py = Math.min(y, window.innerHeight - h - 12);
+                menu.style.left = px + 'px';
+                menu.style.top = py + 'px';
+            });
+        }
+        function closeContextMenu() {
+            document.getElementById('ctxOverlay').classList.remove('open');
+        }
+        document.getElementById('ctxOverlay').addEventListener('click', e => {
+            if (e.target.id === 'ctxOverlay') closeContextMenu();
+        });
+
+        // ---------- modal helpers ----------
+        function modal(content) {
+            const overlay = document.getElementById('modalOverlay');
+            const m = document.getElementById('modal');
+            m.innerHTML = content;
+            overlay.classList.add('open');
+            return {
+                close: () => overlay.classList.remove('open'),
+                el: m,
+            };
+        }
+
+        function renameBook(book) {
+            const m = modal(`
+                <h3>Rename book</h3>
+                <input id="renameInput" type="text" value="${escapeHtml(book.title)}" />
+                <div class="modal-actions">
+                    <button class="modal-btn" id="rnCancel">Cancel</button>
+                    <button class="modal-btn primary" id="rnSave">Save</button>
+                </div>
+            `);
+            const input = m.el.querySelector('#renameInput');
+            input.focus(); input.select();
+            m.el.querySelector('#rnCancel').onclick = m.close;
+            const save = async () => {
+                const title = input.value.trim();
+                if (!title) return;
+                try {
+                    await api(`/api/books/${book.id}`, {
+                        method: 'PATCH',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({title}),
+                    });
+                    m.close();
+                    refreshLibrary();
+                } catch (e) { alert(e); }
+            };
+            m.el.querySelector('#rnSave').onclick = save;
+            input.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
+        }
+
+        function deleteBook(book) {
+            const m = modal(`
+                <h3>Delete book?</h3>
+                <p>“${escapeHtml(book.title)}” will be removed permanently, including its audio.</p>
+                <div class="modal-actions">
+                    <button class="modal-btn" id="delCancel">Cancel</button>
+                    <button class="modal-btn danger" id="delOK">Delete</button>
+                </div>
+            `);
+            m.el.querySelector('#delCancel').onclick = m.close;
+            m.el.querySelector('#delOK').onclick = async () => {
+                try {
+                    await api(`/api/books/${book.id}`, {method: 'DELETE'});
+                    m.close();
+                    refreshLibrary();
+                } catch (e) { alert(e); }
+            };
+        }
+
+        // ---------- add new book flow ----------
+        const fileInput = document.getElementById('fileInput');
+        document.getElementById('addBtn').onclick = () => fileInput.click();
+        fileInput.onchange = () => {
+            const f = fileInput.files[0];
+            if (!f) return;
+            openVoicePicker({mode: 'new', file: f, currentVoice: null});
+            fileInput.value = '';
+        };
+
+        function openChangeVoice(book) {
+            openVoicePicker({mode: 'change', book, currentVoice: book.voice});
+        }
+
+        // ---------- voice picker ----------
+        let vpState = null;
+
+        async function openVoicePicker(state) {
+            vpState = state;
+            // pre-select something sensible
+            state.selected = state.currentVoice || null;
+            stopSample();
+
+            document.getElementById('vpTitle').textContent =
+                state.mode === 'new' ? 'Choose a voice' : 'Change voice';
+            document.getElementById('vpSubtitle').textContent =
+                state.mode === 'new'
+                    ? state.file.name
+                    : `for “${state.book.title}”`;
+            document.getElementById('vpSubmit').textContent =
+                state.mode === 'new' ? 'Generate' : 'Regenerate';
+
+            try {
+                voices = await api('/api/voices');
+            } catch (e) { alert(e); return; }
+            renderVoicePicker();
+            showView('voicepicker');
+        }
+
+        function renderVoicePicker() {
+            const body = document.getElementById('vpBody');
+            body.innerHTML = voices.map(v => {
+                const meta = VOICE_META[v.id] || {name: v.id, desc: ''};
+                const used = v.count > 0;
+                const selected = vpState.selected === v.id;
+                let badge = '';
+                if (used) {
+                    badge = `<div class="voice-badge">USED IN ${v.count} BOOK${v.count === 1 ? '' : 'S'}</div>`;
+                }
+                return `
+                <div class="voice-card ${used ? 'used' : ''} ${selected ? 'selected' : ''}" data-voice="${v.id}">
+                    <button class="voice-play" data-action="play">▶</button>
+                    <div class="voice-info">
+                        <div class="voice-name">${meta.name}</div>
+                        <div class="voice-desc">${meta.desc}</div>
+                        ${badge}
+                    </div>
+                    <div class="voice-radio"></div>
+                </div>`;
+            }).join('');
+            updateVpFooter();
+        }
+
+        function updateVpFooter() {
+            const submit = document.getElementById('vpSubmit');
+            const eta = document.getElementById('vpEta');
+            if (vpState.selected) {
+                submit.classList.add('ready');
+                submit.disabled = false;
+                // compute ETA
+                let wordCount = vpState.mode === 'change'
+                    ? (vpState.book.word_count || 0)
+                    : null;
+                // for new mode we don't know word_count yet — show a vague message
+                if (wordCount && vpState.etaSecPerWord) {
+                    eta.textContent = fmtETA(wordCount * vpState.etaSecPerWord);
+                } else if (vpState.mode === 'change' && vpState.book.eta_seconds && vpState.book.word_count) {
+                    // approximate using prior generation's rate
+                    eta.textContent = fmtETA(vpState.book.eta_seconds);
+                } else {
+                    eta.textContent = '';
+                }
+            } else {
+                submit.classList.remove('ready');
+                submit.disabled = true;
+                eta.textContent = 'Select a voice to continue';
+            }
+        }
+
+        document.getElementById('vpBody').addEventListener('click', e => {
+            const card = e.target.closest('.voice-card');
+            if (!card) return;
+            const voice = card.dataset.voice;
+            if (e.target.closest('[data-action="play"]')) {
+                playSample(voice, card);
+                return;
+            }
+            vpState.selected = voice;
+            // update selection visually
+            document.querySelectorAll('.voice-card').forEach(c =>
+                c.classList.toggle('selected', c.dataset.voice === voice));
+            updateVpFooter();
+        });
+
+        document.getElementById('vpBack').onclick = () => {
+            stopSample();
+            showView('library');
+        };
+
+        document.getElementById('vpSubmit').onclick = async () => {
+            if (!vpState.selected) return;
+            stopSample();
+            const voice = vpState.selected;
+            try {
+                if (vpState.mode === 'new') {
+                    const fd = new FormData();
+                    fd.append('file', vpState.file);
+                    fd.append('voice', voice);
+                    const res = await fetch('/api/books', {method: 'POST', body: fd});
+                    if (!res.ok) {
+                        const j = await res.json().catch(() => ({}));
+                        throw j.error || res.statusText;
+                    }
+                } else {
+                    await api(`/api/books/${vpState.book.id}/regenerate`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({voice}),
+                    });
+                }
+                showView('library');
+                refreshLibrary();
+            } catch (e) {
+                alert(e);
+            }
+        };
+
+        // ---------- voice samples ----------
+        const sampleAudio = document.getElementById('sampleAudio');
+        let samplePlayingCard = null;
+        function playSample(voice, card) {
+            if (samplePlayingCard === card && !sampleAudio.paused) {
+                stopSample();
+                return;
+            }
+            stopSample();
+            sampleAudio.src = `/api/voices/${voice}/sample`;
+            sampleAudio.play().catch(() => {});
+            samplePlayingCard = card;
+            card.classList.add('playing');
+            const playBtn = card.querySelector('.voice-play');
+            if (playBtn) playBtn.textContent = '❚❚';
+        }
+        function stopSample() {
+            sampleAudio.pause();
+            sampleAudio.currentTime = 0;
+            if (samplePlayingCard) {
+                samplePlayingCard.classList.remove('playing');
+                const pb = samplePlayingCard.querySelector('.voice-play');
+                if (pb) pb.textContent = '▶';
+                samplePlayingCard = null;
+            }
+        }
+        sampleAudio.addEventListener('ended', stopSample);
+
+        // ---------- reader ----------
+        const audio = document.getElementById('audio');
+        let currentBook = null;
+        let words = [];
+        let pages = [];           // each page is an array of word indices
+        let currentPage = 0;
+        let currentIdx = -1;
+        let positionSaveTimer = null;
+        let lastSavedIdx = -1;
+
+        async function openReader(bookId) {
+            try {
+                currentBook = await api(`/api/books/${bookId}`);
+                const syncData = await fetch(`/api/books/${bookId}/sync`).then(r => r.json());
+                words = syncData.words || [];
+            } catch (e) { alert(e); return; }
+
+            document.getElementById('docTitle').textContent = currentBook.title;
+            audio.src = `/api/books/${bookId}/audio`;
+            audio.playbackRate = 1;
+            document.querySelectorAll('.speed-btn').forEach(b =>
+                b.classList.toggle('active', b.dataset.speed === '1'));
+
+            paginate();
+            renderPages();
+
+            // jump to last word index
+            const idx = Math.min(currentBook.last_word_index || 0, words.length - 1);
+            if (idx > 0 && words[idx]) {
+                audio.addEventListener('loadedmetadata', () => {
+                    audio.currentTime = words[idx].start;
+                }, {once: true});
+                switchToPage(findPageForWord(idx));
+            } else {
+                switchToPage(0);
+            }
+            currentIdx = -1;
+            lastSavedIdx = currentBook.last_word_index || 0;
+
+            document.getElementById('playPauseBtn').textContent = '▶';
+            showView('reader');
+        }
+
+        function paginate() {
+            pages = [];
+            let cur = [];
+            const MIN = 150, MAX = 240;
+            for (let i = 0; i < words.length; i++) {
+                cur.push(i);
+                const w = words[i].word;
+                const ends = /[.!?…]["')\]]?$/.test(w);
+                if (cur.length >= MIN && ends) {
+                    pages.push(cur); cur = [];
+                } else if (cur.length >= MAX) {
+                    pages.push(cur); cur = [];
+                }
+            }
+            if (cur.length) pages.push(cur);
+            if (pages.length === 0) pages = [[]];
+        }
+
+        function renderPages() {
+            const area = document.getElementById('readingArea');
+            area.innerHTML = pages.map((idxs, pn) => `
+                <div class="page${pn === 0 ? ' current' : ''}" id="page-${pn}">
+                    ${idxs.map(i => `<span class="word" id="w${i}" data-i="${i}">${escapeHtml(words[i].word)} </span>`).join('')}
+                </div>
+            `).join('');
+            currentPage = 0;
+            updatePageIndicator();
+        }
+
+        function updatePageIndicator() {
+            document.getElementById('pageIndicator').textContent =
+                `${currentPage + 1} / ${pages.length}`;
+            document.getElementById('prevPageBtn').disabled = currentPage === 0;
+            document.getElementById('nextPageBtn').disabled = currentPage >= pages.length - 1;
+        }
+
+        function findPageForWord(idx) {
+            for (let p = 0; p < pages.length; p++) {
+                const last = pages[p][pages[p].length - 1];
+                if (idx <= last) return p;
+            }
+            return pages.length - 1;
+        }
+
+        function switchToPage(pn) {
+            if (pn < 0 || pn >= pages.length) return;
+            const cur = document.getElementById(`page-${currentPage}`);
+            const next = document.getElementById(`page-${pn}`);
+            if (cur) cur.classList.remove('current');
+            if (next) {
+                next.classList.add('current');
+                next.scrollTop = 0;
+            }
+            currentPage = pn;
+            updatePageIndicator();
+        }
+
+        document.getElementById('prevPageBtn').onclick = () => {
+            if (currentPage > 0) {
+                const newPage = currentPage - 1;
+                switchToPage(newPage);
+                seekToWord(pages[newPage][0], false);
+            }
+        };
+        document.getElementById('nextPageBtn').onclick = () => {
+            if (currentPage < pages.length - 1) {
+                const newPage = currentPage + 1;
+                switchToPage(newPage);
+                seekToWord(pages[newPage][0], false);
+            }
+        };
+
+        document.getElementById('readingArea').addEventListener('click', e => {
+            const span = e.target.closest('.word');
+            if (!span) return;
+            const i = parseInt(span.dataset.i);
+            seekToWord(i, true);
+        });
+
+        function seekToWord(i, autoplay) {
+            if (!words[i]) return;
+            audio.currentTime = words[i].start;
+            if (autoplay && audio.paused) {
+                audio.play();
+                document.getElementById('playPauseBtn').textContent = '⏸';
+            }
+        }
+
+        document.getElementById('playPauseBtn').onclick = () => {
+            if (audio.paused) {
+                audio.play();
+                document.getElementById('playPauseBtn').textContent = '⏸';
+            } else {
+                audio.pause();
+                document.getElementById('playPauseBtn').textContent = '▶';
+                savePosition(true);
+            }
+        };
+
+        document.querySelectorAll('.speed-btn').forEach(b => {
+            b.onclick = () => {
+                audio.playbackRate = parseFloat(b.dataset.speed);
+                document.querySelectorAll('.speed-btn').forEach(x => x.classList.remove('active'));
+                b.classList.add('active');
+            };
+        });
+
+        document.getElementById('progressBar').onclick = (e) => {
+            const bar = e.currentTarget;
+            const rect = bar.getBoundingClientRect();
+            const ratio = (e.clientX - rect.left) / rect.width;
+            audio.currentTime = ratio * (audio.duration || 0);
+        };
+
+        audio.addEventListener('timeupdate', () => {
+            const t = audio.currentTime;
+            const dur = audio.duration || 0;
+            if (dur) {
+                document.getElementById('progressFill').style.width =
+                    (t / dur * 100) + '%';
+                document.getElementById('timeDisplay').textContent =
+                    fmt(t) + ' / ' + fmt(dur);
+            }
+            // find active word — start from current to avoid full scan each tick
+            let idx = findWordAt(t);
+            if (idx !== currentIdx) {
+                if (currentIdx >= 0) {
+                    document.getElementById('w' + currentIdx)?.classList.remove('active');
+                }
+                if (idx >= 0) {
+                    const el = document.getElementById('w' + idx);
+                    if (el) el.classList.add('active');
+                    const wp = findPageForWord(idx);
+                    if (wp !== currentPage) switchToPage(wp);
+                }
+                currentIdx = idx;
+                schedulePositionSave();
+            }
+        });
+
+        function findWordAt(t) {
+            // binary search by start time
+            let lo = 0, hi = words.length - 1, best = -1;
+            while (lo <= hi) {
+                const mid = (lo + hi) >> 1;
+                if (words[mid].start <= t) { best = mid; lo = mid + 1; }
+                else hi = mid - 1;
+            }
+            if (best >= 0 && t < words[best].end + 0.01) return best;
+            return best;
+        }
+
+        audio.addEventListener('ended', () => {
+            document.getElementById('playPauseBtn').textContent = '▶';
+            savePosition(true);
+        });
+
+        function schedulePositionSave() {
+            if (positionSaveTimer) return;
+            positionSaveTimer = setTimeout(() => {
+                positionSaveTimer = null;
+                savePosition(false);
+            }, 4000);
+        }
+
+        function savePosition(immediate) {
+            if (!currentBook) return;
+            const idx = currentIdx >= 0 ? currentIdx : lastSavedIdx;
+            if (idx === lastSavedIdx) return;
+            lastSavedIdx = idx;
+            fetch(`/api/books/${currentBook.id}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({last_word_index: idx}),
+            }).catch(() => {});
+        }
+
+        document.getElementById('readerBack').onclick = () => {
+            audio.pause();
+            document.getElementById('playPauseBtn').textContent = '▶';
+            savePosition(true);
+            currentBook = null;
+            showView('library');
+            refreshLibrary();
+        };
+
+        // save on tab close
+        window.addEventListener('beforeunload', () => {
+            if (!currentBook || currentIdx < 0 || currentIdx === lastSavedIdx) return;
+            try {
+                navigator.sendBeacon(
+                    `/api/books/${currentBook.id}/position`,
+                    new Blob([JSON.stringify({idx: currentIdx})], {type: 'application/json'})
+                );
+            } catch (e) {}
+        });
+
+        // ---------- init ----------
+        refreshLibrary();
+    </script>
+</body>
+
+</html>
