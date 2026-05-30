@@ -188,12 +188,13 @@ def extract_text(data, ext):
 # ---------- Chatterbox TTS ----------
 
 _cb_model = None
+_cb_default_conds = None  # built-in voice conds, captured at load so we can restore
 _cb_model_lock  = threading.Lock()
 _cb_synthesis_lock = threading.Lock()  # Chatterbox is not thread-safe for concurrent synthesis
 
 
 def get_cb_model():
-    global _cb_model
+    global _cb_model, _cb_default_conds
     if _cb_model is not None:
         return _cb_model
     with _cb_model_lock:
@@ -203,6 +204,7 @@ def get_cb_model():
         from chatterbox.tts import ChatterboxTTS
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model = ChatterboxTTS.from_pretrained(device=device)
+        _cb_default_conds = model.conds
         _cb_model = model
         print(f"Chatterbox ready — device={device}  sr={model.sr}")
         return _cb_model
@@ -257,10 +259,18 @@ def synthesize(text, voice, exaggeration=0.5, cfg_weight=0.5):
     model = get_cb_model()
     sr = model.sr
 
+    # Set conditionals ONCE per book (voice encoder + ref tokenization is the
+    # second-biggest cost after the autoregressive loop — no reason to re-do it
+    # for every sentence).
     voice_path = None
     if voice != "default":
         vp = VOICES_DIR / f"{voice}.wav"
-        voice_path = str(vp) if vp.exists() else None
+        if vp.exists():
+            voice_path = str(vp)
+    if voice_path:
+        model.prepare_conditionals(voice_path, exaggeration=exaggeration)
+    else:
+        model.conds = _cb_default_conds  # restore built-in voice
 
     paragraphs = [p.strip() for p in re.split(r'\n\n+', text) if p.strip()]
     if not paragraphs:
@@ -281,7 +291,6 @@ def synthesize(text, voice, exaggeration=0.5, cfg_weight=0.5):
             with torch.no_grad():
                 wav = model.generate(
                     s,
-                    audio_prompt_path=voice_path,
                     exaggeration=exaggeration,
                     cfg_weight=cfg_weight,
                 )
