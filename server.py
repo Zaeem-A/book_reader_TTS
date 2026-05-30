@@ -7,6 +7,7 @@ import json
 import io
 import math
 import os
+import random
 import re
 import sqlite3
 import subprocess
@@ -17,7 +18,7 @@ import traceback
 from pathlib import Path
 
 import numpy as np
-import onnxruntime as ort
+import torch
 from flask import Flask, request, jsonify, send_file, abort
 
 app = Flask(__name__)
@@ -28,26 +29,22 @@ AUDIO_DIR   = LIBRARY_DIR / "audio"
 SYNC_DIR    = LIBRARY_DIR / "sync"
 SAMPLES_DIR = LIBRARY_DIR / "samples"
 SOURCES_DIR = LIBRARY_DIR / "sources"
-MODELS_DIR  = LIBRARY_DIR / "models"
+VOICES_DIR  = LIBRARY_DIR / "voices"
 DB_PATH     = LIBRARY_DIR / "library.db"
 
-for d in (LIBRARY_DIR, AUDIO_DIR, SYNC_DIR, SAMPLES_DIR, SOURCES_DIR, MODELS_DIR):
+for d in (LIBRARY_DIR, AUDIO_DIR, SYNC_DIR, SAMPLES_DIR, SOURCES_DIR, VOICES_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 HTML_PATH = Path(__file__).resolve().parent / "frontend.html"
 
 SAMPLE_TEXT = "In the still hours before dawn, the city held its breath."
 
-VOICES = [
-    "af_heart",
-    "af_bella",
-    "af_nicole",
-    "af_sarah",
-    "am_adam",
-    "am_michael",
-    "bf_emma",
-    "bm_george",
-]
+def get_voices():
+    """'default' plus any .wav reference clips the user has uploaded."""
+    names = ["default"]
+    for p in sorted(VOICES_DIR.glob("*.wav")):
+        names.append(p.stem)
+    return names
 
 
 
@@ -82,10 +79,25 @@ def init_db():
             value TEXT
         );
         """)
+        cols = {r['name'] for r in conn.execute("PRAGMA table_info(books)").fetchall()}
+        if 'exaggeration' not in cols:
+            conn.execute("ALTER TABLE books ADD COLUMN exaggeration REAL NOT NULL DEFAULT 0.5")
+        if 'cfg_weight' not in cols:
+            conn.execute("ALTER TABLE books ADD COLUMN cfg_weight REAL NOT NULL DEFAULT 0.5")
         conn.execute(
             "UPDATE books SET status='failed', error='Server restarted during processing' "
             "WHERE status='processing'"
         )
+
+
+def _clamp01(v, default=0.5):
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(f):
+        return default
+    return max(0.0, min(1.0, f))
 
 
 init_db()
@@ -173,173 +185,65 @@ def extract_text(data, ext):
     raise Exception(f"Unsupported format: {ext}")
 
 
-# ---------- Kokoro TTS ----------
+# ---------- Chatterbox TTS ----------
 
-_settled_n = None        # safe concurrent worker count (int), determined once by probe
-_settled_lock = threading.Lock()
-_use_gpu = None          # bool, set during probe
-_synthesis_lock = threading.Lock()  # espeak is not thread-safe — only one synthesis at a time
-
-MAX_WORKERS = 3
-
-_PROBE_TEXT = (
-    "In the still hours before dawn, the city held its breath "
-    "with a quiet determination that only the long dark night could understand. "
-    "The empty streets stretched on, silent and wide, beneath a pale and heavy sky."
-)
+_cb_model = None
+_cb_model_lock  = threading.Lock()
+_cb_synthesis_lock = threading.Lock()  # Chatterbox is not thread-safe for concurrent synthesis
 
 
-def get_model_paths():
-    model  = MODELS_DIR / "kokoro-v1.0.onnx"
-    voices = MODELS_DIR / "voices-v1.0.bin"
-    if not model.exists() or not voices.exists():
-        raise FileNotFoundError(
-            f"Kokoro model files not found in {MODELS_DIR}\n"
-            "Download with:\n"
-            "  wget https://github.com/thewh1teagle/kokoro-onnx/releases/"
-            "download/model-files-v1.0/kokoro-v1.0.onnx "
-            f"-P {MODELS_DIR}\n"
-            "  wget https://github.com/thewh1teagle/kokoro-onnx/releases/"
-            "download/model-files-v1.0/voices-v1.0.bin "
-            f"-P {MODELS_DIR}"
-        )
-    return str(model), str(voices)
+def get_cb_model():
+    global _cb_model
+    if _cb_model is not None:
+        return _cb_model
+    with _cb_model_lock:
+        if _cb_model is not None:
+            return _cb_model
+        print("Loading Chatterbox... (first run downloads weights ~1 GB)")
+        from chatterbox.tts import ChatterboxTTS
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model = ChatterboxTTS.from_pretrained(device=device)
+        _cb_model = model
+        print(f"Chatterbox ready — device={device}  sr={model.sr}")
+        return _cb_model
 
 
-def _make_session(model_path, providers):
-    opts = ort.SessionOptions()
-    opts.intra_op_num_threads = 0 if 'CUDAExecutionProvider' in providers else 1
-    if 'CUDAExecutionProvider' in providers:
-        cuda_opts = {"cudnn_conv_algo_search": "HEURISTIC"}
-        providers = [("CUDAExecutionProvider", cuda_opts), "CPUExecutionProvider"]
-    return ort.InferenceSession(model_path, providers=providers, sess_options=opts)
+threading.Thread(target=lambda: get_cb_model(), daemon=True).start()
 
 
-def _vram_used_mb():
+def _apply_humanization(audio, sr):
+    """EQ + compression + subtle reverb + loudness normalization on a float32 mono array."""
+    if len(audio) == 0:
+        return audio
     try:
-        import pynvml
-        pynvml.nvmlInit()
-        h = pynvml.nvmlDeviceGetHandleByIndex(0)
-        info = pynvml.nvmlDeviceGetMemoryInfo(h)
-        return info.used / 1024 / 1024
-    except Exception:
-        return None
+        from pedalboard import Pedalboard, HighpassFilter, Compressor, Reverb
+    except ImportError:
+        return audio
 
+    board = Pedalboard([
+        HighpassFilter(cutoff_frequency_hz=80),
+        Compressor(threshold_db=-18, ratio=2.5, attack_ms=5.0, release_ms=150.0),
+        Reverb(room_size=0.08, wet_level=0.03, dry_level=0.97, damping=0.7),
+    ])
+    processed = board(audio.reshape(1, -1), sample_rate=sr)[0]
 
-def _create_workers(n, providers, model_path, voices_path):
-    """Spin up n fresh Kokoro sessions. Always creates new ONNX sessions (clean BFC arenas)."""
-    from kokoro_onnx import Kokoro
-    workers = []
-    for i in range(n):
-        before = _vram_used_mb()
-        sess = _make_session(model_path, providers)
-        workers.append(Kokoro.from_session(sess, voices_path))
-        after = _vram_used_mb()
-        if before is not None and after is not None:
-            print(f"  session {i+1}/{n}: +{after - before:.0f} MB  (total {after:.0f} MB used)")
-    return workers
-
-
-def _probe_concurrent(workers, probe_phonemes):
-    """Run inference on all workers simultaneously. Returns None on success, exception on OOM."""
-    errors = [None] * len(workers)
-
-    def run(idx, w):
+    # Loudness normalization — compute gain ourselves so we can cap it before clipping occurs
+    if len(processed) >= int(sr * 0.4):
         try:
-            w.create(probe_phonemes, voice="af_heart", is_phonemes=True, speed=1.0, lang="en-us")
-        except Exception as e:
-            errors[idx] = e
+            import pyloudnorm as pyln
+            meter = pyln.Meter(sr)
+            loudness = meter.integrated_loudness(processed)
+            if np.isfinite(loudness) and loudness > -70.0:
+                gain = 10 ** ((-20.0 - loudness) / 20.0)
+                peak = np.max(np.abs(processed))
+                if peak > 0:
+                    gain = min(gain, 0.98 / peak)
+                processed = processed * gain
+        except Exception:
+            pass
 
-    threads = [threading.Thread(target=run, args=(i, w)) for i, w in enumerate(workers)]
-    for t in threads: t.start()
-    for t in threads: t.join()
+    return processed.astype(np.float32)
 
-    return next((e for e in errors if e is not None), None)
-
-
-def get_settled_n():
-    """Return the safe concurrent worker count, probing once at first call."""
-    import gc
-    global _settled_n, _use_gpu
-
-    if _settled_n is not None:
-        return _settled_n
-
-    with _settled_lock:
-        if _settled_n is not None:
-            return _settled_n
-
-        from kokoro_onnx import Kokoro
-
-        model_path, voices_path = get_model_paths()
-        available = ort.get_available_providers()
-
-        if 'CUDAExecutionProvider' not in available:
-            print("GPU not detected — using CPU (launch via ./start.sh for GPU)")
-            _use_gpu = False
-            _settled_n = 1
-            print("Kokoro ready (1 worker, CPU)")
-            return _settled_n
-
-        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-        _use_gpu = True
-        print("GPU detected — probing safe worker count...")
-
-        probe_workers = []
-        probe_phonemes = None
-        safe_count = 0
-
-        for attempt in range(1, MAX_WORKERS + 1):
-            try:
-                sess = _make_session(model_path, providers)
-                candidate = Kokoro.from_session(sess, voices_path)
-            except Exception as e:
-                if "Failed to allocate memory" in str(e):
-                    print(f"  {attempt} worker(s) → OOM at load, settling on {safe_count}")
-                    break
-                raise
-
-            probe_workers.append(candidate)
-
-            if probe_phonemes is None:
-                raw = candidate.tokenizer.phonemize(_PROBE_TEXT, 'en-us')
-                probe_phonemes = _split_phoneme_string(raw)[0]
-                print(f"  probe phoneme length: {len(probe_phonemes)} chars")
-
-            err = _probe_concurrent(probe_workers, probe_phonemes)
-            if err is not None:
-                probe_workers.pop()
-                print(f"  {attempt} worker(s) → OOM at inference, settling on {safe_count}")
-                break
-
-            safe_count = attempt
-            print(f"  {attempt} worker(s) → OK")
-
-            if attempt == MAX_WORKERS:
-                print(f"  hit MAX_WORKERS cap ({MAX_WORKERS})")
-
-        # Discard all probe sessions — synthesis creates its own fresh sessions each time
-        del probe_workers
-        gc.collect()
-
-        if safe_count == 0:
-            raise RuntimeError("Even a single GPU worker OOMed during probe — check VRAM")
-
-        _settled_n = safe_count
-        print(f"Kokoro ready ({safe_count} worker(s), GPU)")
-        return _settled_n
-
-
-def _preload():
-    try:
-        get_settled_n()
-    except Exception as e:
-        print(f"Kokoro preload failed: {e}")
-
-threading.Thread(target=_preload, daemon=True).start()
-
-
-MAX_PHONEME_CHARS = 150
 
 def split_sentences(text):
     text = re.sub(r'\s+', ' ', text.strip())
@@ -347,153 +251,77 @@ def split_sentences(text):
     return [p.strip() for p in parts if p.strip()]
 
 
-def _split_phoneme_string(p):
-    """Split a phoneme string on word boundaries so no chunk exceeds MAX_PHONEME_CHARS."""
-    if len(p) <= MAX_PHONEME_CHARS:
-        return [p]
-    words = p.split(' ')
-    chunks, current, current_len = [], [], 0
-    for w in words:
-        add = (1 if current else 0) + len(w)
-        if current and current_len + add > MAX_PHONEME_CHARS:
-            chunks.append(' '.join(current))
-            current, current_len = [w], len(w)
-        else:
-            current.append(w)
-            current_len += add
-    if current:
-        chunks.append(' '.join(current))
-    return chunks
+def synthesize(text, voice, exaggeration=0.5, cfg_weight=0.5):
+    import lameenc
+    import torchaudio
+    model = get_cb_model()
+    sr = model.sr
 
+    voice_path = None
+    if voice != "default":
+        vp = VOICES_DIR / f"{voice}.wav"
+        voice_path = str(vp) if vp.exists() else None
 
-
-def synthesize(text, voice):
-    import lameenc, gc
-    global _settled_n, _use_gpu
-
-    n = get_settled_n()
-    model_path, voices_path = get_model_paths()
-    providers = (["CUDAExecutionProvider", "CPUExecutionProvider"]
-                 if _use_gpu else ["CPUExecutionProvider"])
-
-    sentences = split_sentences(text)
-    if not sentences:
+    paragraphs = [p.strip() for p in re.split(r'\n\n+', text) if p.strip()]
+    if not paragraphs:
         raise Exception("No text to synthesize")
 
-    workers = None
-    try:
-        # Create fresh sessions — clean BFC arenas, no carry-over from previous book
-        workers = _create_workers(n, providers, model_path, voices_path)
+    all_segs   = []
+    all_timings = []
+    current_time = 0.0
 
-        # Phonemize in main thread (espeak not thread-safe); done once, outside retry loop
-        phonemized = []
-        for s in sentences:
-            p = workers[0].tokenizer.phonemize(s, 'en-us')
-            phonemized.append((s, _split_phoneme_string(p)))
-        while True:
-            k, m = divmod(len(phonemized), n)
-            groups, start = [], 0
-            for i in range(n):
-                size = k + (1 if i < m else 0)
-                if size:
-                    groups.append(phonemized[start:start + size])
-                start += size
+    for para_idx, para in enumerate(paragraphs):
+        for sent_idx, s in enumerate(split_sentences(para)):
+            # Paragraph break pause
+            if para_idx > 0 and sent_idx == 0:
+                pause = random.uniform(0.45, 0.65)
+                all_segs.append(np.zeros(int(pause * sr), dtype=np.float32))
+                current_time += pause
 
-            actual_n = len(groups)
-            chunk_results = [None] * actual_n
-            chunk_errors  = [None] * actual_n
+            with torch.no_grad():
+                wav = model.generate(
+                    s,
+                    audio_prompt_path=voice_path,
+                    exaggeration=exaggeration,
+                    cfg_weight=cfg_weight,
+                )
 
-            def run_chunk(cidx, group, worker):
-                try:
-                    enc = lameenc.Encoder()
-                    enc.set_bit_rate(48)
-                    enc.set_in_sample_rate(24000)
-                    enc.set_channels(1)
-                    enc.set_quality(7)
+            audio = wav.squeeze().cpu().float().numpy()
 
-                    mp3_parts = []
-                    timings   = []
-                    chunk_time = 0.0
+            # Speed jitter ±5% via resampling (changes duration + pitch slightly)
+            speed = random.uniform(0.95, 1.05)
+            if abs(speed - 1.0) > 0.005:
+                wav_t = torch.from_numpy(audio).unsqueeze(0)
+                wav_t = torchaudio.functional.resample(
+                    wav_t, orig_freq=sr, new_freq=int(sr / speed)
+                )
+                audio = wav_t.squeeze().numpy()
 
-                    for s, p_chunks in group:
-                        pieces = []
-                        for p_chunk in p_chunks:
-                            audio, _ = worker.create(
-                                p_chunk, voice=voice, is_phonemes=True, speed=1.0, lang='en-us'
-                            )
-                            pieces.append(audio)
+            dur = len(audio) / sr
+            all_segs.append(audio)
 
-                        seg = np.concatenate(pieces) if len(pieces) > 1 else pieces[0]
-                        dur = len(seg) / 24000
-                        pcm = np.clip(seg * 32767, -32768, 32767).astype(np.int16)
-                        mp3_parts.append(enc.encode(pcm.tobytes()))
-                        del seg, pieces, pcm
+            ws = s.split()
+            if ws:
+                total = sum(len(w) for w in ws)
+                t = current_time
+                for w in ws:
+                    wd = len(w) / max(total, 1) * dur
+                    all_timings.append({"word": w, "start": t, "end": t + wd})
+                    t += wd
+            current_time += dur
 
-                        ws = s.split()
-                        if ws:
-                            total = sum(len(w) for w in ws)
-                            t = chunk_time
-                            for w in ws:
-                                wd = len(w) / max(total, 1) * dur
-                                timings.append({"word": w, "start": t, "end": t + wd})
-                                t += wd
-                        chunk_time += dur
+    full_audio = np.concatenate(all_segs) if all_segs else np.zeros(0, dtype=np.float32)
+    full_audio = _apply_humanization(full_audio, sr)
 
-                    mp3_parts.append(enc.flush())
-                    chunk_results[cidx] = (b''.join(mp3_parts), timings, chunk_time)
-                except Exception as e:
-                    chunk_errors[cidx] = e
+    enc = lameenc.Encoder()
+    enc.set_bit_rate(128)
+    enc.set_in_sample_rate(sr)
+    enc.set_channels(1)
+    enc.set_quality(5)
+    pcm = np.clip(full_audio * 32767, -32768, 32767).astype(np.int16)
+    mp3_data = enc.encode(pcm.tobytes()) + enc.flush()
 
-            threads = [
-                threading.Thread(target=run_chunk, args=(i, groups[i], workers[i]))
-                for i in range(actual_n)
-            ]
-            for t in threads: t.start()
-            for t in threads: t.join()
-
-            oom = next((e for e in chunk_errors if e is not None
-                        and "Failed to allocate memory" in str(e)), None)
-            other = next((e for e in chunk_errors if e is not None
-                          and "Failed to allocate memory" not in str(e)), None)
-
-            if other:
-                raise other
-
-            if oom:
-                with _settled_lock:
-                    if n <= 1:
-                        raise RuntimeError(
-                            "OOM with a single worker — VRAM too low for this input"
-                        ) from oom
-                    n -= 1
-                    _settled_n = n
-                    print(f"OOM during synthesis — reducing to {n} worker(s) and retrying")
-                # Replace sessions with a fresh, smaller set
-                workers = None
-                gc.collect()
-                workers = _create_workers(n, providers, model_path, voices_path)
-                continue
-
-            # Success — stitch chunks in book order
-            final_mp3     = []
-            final_timings = []
-            time_offset   = 0.0
-            for mp3_bytes, timings, chunk_dur in chunk_results:
-                final_mp3.append(mp3_bytes)
-                for w in timings:
-                    final_timings.append({
-                        "word":  w["word"],
-                        "start": w["start"] + time_offset,
-                        "end":   w["end"]   + time_offset,
-                    })
-                time_offset += chunk_dur
-
-            return b''.join(final_mp3), final_timings
-
-    finally:
-        if workers is not None:
-            del workers
-        gc.collect()
+    return mp3_data, all_timings
 
 
 # ---------- calibration ----------
@@ -505,7 +333,7 @@ def get_sec_per_word(conn):
     d = {r["key"]: float(r["value"]) for r in rows}
     if d.get("total_words", 0) > 0:
         return d["total_seconds"] / d["total_words"]
-    return 0.006   # GPU default: ~166 words/sec
+    return 0.05    # Chatterbox GPU default: ~20 words/sec
 
 
 def update_calibration(conn, word_count, elapsed):
@@ -525,12 +353,12 @@ def update_calibration(conn, word_count, elapsed):
 
 # ---------- background processing ----------
 
-def process_book(book_id, voice):
+def process_book(book_id, voice, exaggeration=0.5, cfg_weight=0.5):
     try:
         text = (SOURCES_DIR / f"{book_id}.txt").read_text(encoding='utf-8')
         t0   = time.time()
-        with _synthesis_lock:
-            audio, words = synthesize(text, voice)
+        with _cb_synthesis_lock:
+            audio, words = synthesize(text, voice, exaggeration, cfg_weight)
         elapsed = time.time() - t0
         total_duration = words[-1]["end"] if words else 0.0
         word_count = len(text.split())
@@ -584,10 +412,12 @@ def create_book():
     if request.method == 'OPTIONS':
         return '', 200
     file  = request.files.get('file')
-    voice = request.form.get('voice', 'af_heart')
+    voice = request.form.get('voice', 'default')
+    exag  = _clamp01(request.form.get('exaggeration'), 0.5)
+    cfg   = _clamp01(request.form.get('cfg_weight'),   0.5)
     if not file:
         return jsonify({"error": "No file"}), 400
-    if voice not in VOICES:
+    if voice not in get_voices():
         return jsonify({"error": "Unknown voice"}), 400
 
     name = Path(file.filename).stem
@@ -609,15 +439,15 @@ def create_book():
         eta = word_count * sec_per_word
         cur = conn.execute(
             "INSERT INTO books(title, source_format, voice, word_count, eta_seconds, "
-            "status, processing_started_at, created_at) "
-            "VALUES (?,?,?,?,?,'processing',?,datetime('now'))",
-            (name, ext.lstrip('.'), voice, word_count, eta, time.time())
+            "status, processing_started_at, exaggeration, cfg_weight, created_at) "
+            "VALUES (?,?,?,?,?,'processing',?,?,?,datetime('now'))",
+            (name, ext.lstrip('.'), voice, word_count, eta, time.time(), exag, cfg)
         )
         book_id = cur.lastrowid
         row = dict(conn.execute("SELECT * FROM books WHERE id=?", (book_id,)).fetchone())
 
     (SOURCES_DIR / f"{book_id}.txt").write_text(text, encoding='utf-8')
-    threading.Thread(target=process_book, args=(book_id, voice), daemon=True).start()
+    threading.Thread(target=process_book, args=(book_id, voice, exag, cfg), daemon=True).start()
     return jsonify(row)
 
 
@@ -682,7 +512,7 @@ def delete_book(book_id):
 def regenerate(book_id):
     data  = request.get_json(silent=True) or {}
     voice = data.get('voice')
-    if voice not in VOICES:
+    if voice not in get_voices():
         return jsonify({"error": "Unknown voice"}), 400
     if not (SOURCES_DIR / f"{book_id}.txt").exists():
         return jsonify({"error": "Source not available"}), 404
@@ -691,16 +521,18 @@ def regenerate(book_id):
         row = conn.execute("SELECT * FROM books WHERE id=?", (book_id,)).fetchone()
         if not row:
             return jsonify({"error": "Not found"}), 404
+        exag = _clamp01(data.get('exaggeration'), row['exaggeration'] if row['exaggeration'] is not None else 0.5)
+        cfg  = _clamp01(data.get('cfg_weight'),   row['cfg_weight']   if row['cfg_weight']   is not None else 0.5)
         sec_per_word = get_sec_per_word(conn)
         eta = (row['word_count'] or 0) * sec_per_word
         conn.execute(
             "UPDATE books SET voice=?, status='processing', eta_seconds=?, "
-            "processing_started_at=?, error=NULL WHERE id=?",
-            (voice, eta, time.time(), book_id)
+            "processing_started_at=?, exaggeration=?, cfg_weight=?, error=NULL WHERE id=?",
+            (voice, eta, time.time(), exag, cfg, book_id)
         )
         row = dict(conn.execute("SELECT * FROM books WHERE id=?", (book_id,)).fetchone())
 
-    threading.Thread(target=process_book, args=(book_id, voice), daemon=True).start()
+    threading.Thread(target=process_book, args=(book_id, voice, exag, cfg), daemon=True).start()
     return jsonify(row)
 
 
@@ -727,17 +559,51 @@ def list_voices():
             "SELECT voice, COUNT(*) as count FROM books WHERE status='ready' GROUP BY voice"
         ).fetchall()
     counts = {r['voice']: r['count'] for r in rows}
-    return jsonify([{"id": v, "count": counts.get(v, 0)} for v in VOICES])
+    return jsonify([{"id": v, "count": counts.get(v, 0)} for v in get_voices()])
+
+
+@app.route('/api/voices/upload', methods=['POST'])
+def upload_voice():
+    name = (request.form.get('name') or '').strip()
+    file = request.files.get('file')
+    if not name:
+        return jsonify({"error": "name required"}), 400
+    if not file:
+        return jsonify({"error": "wav file required"}), 400
+    name = re.sub(r'[^\w\-]', '_', name)
+    if name == 'default':
+        return jsonify({"error": "Cannot use 'default' as voice name"}), 400
+    dest = VOICES_DIR / f"{name}.wav"
+    file.save(str(dest))
+    # clear stale sample if one existed
+    (SAMPLES_DIR / f"{name}.mp3").unlink(missing_ok=True)
+    return jsonify({"id": name, "count": 0})
+
+
+@app.route('/api/voices/<voice>', methods=['DELETE'])
+def delete_voice(voice):
+    if voice == 'default':
+        return jsonify({"error": "Cannot delete the default voice"}), 400
+    (VOICES_DIR  / f"{voice}.wav").unlink(missing_ok=True)
+    (SAMPLES_DIR / f"{voice}.mp3").unlink(missing_ok=True)
+    return jsonify({"ok": True})
 
 
 @app.route('/api/voices/<voice>/sample')
 def voice_sample(voice):
-    if voice not in VOICES:
+    if voice not in get_voices():
         abort(404)
-    p = SAMPLES_DIR / f"{voice}.mp3"
+    exag = _clamp01(request.args.get('exaggeration'), 0.5)
+    cfg  = _clamp01(request.args.get('cfg_weight'),   0.5)
+    # Use the plain filename for the (0.5, 0.5) default — preserves legacy samples;
+    # tag others by their values so the picker can preview each personality.
+    if abs(exag - 0.5) < 0.01 and abs(cfg - 0.5) < 0.01:
+        p = SAMPLES_DIR / f"{voice}.mp3"
+    else:
+        p = SAMPLES_DIR / f"{voice}_{int(round(exag*100))}_{int(round(cfg*100))}.mp3"
     if not p.exists():
         try:
-            audio, _ = synthesize(SAMPLE_TEXT, voice)
+            audio, _ = synthesize(SAMPLE_TEXT, voice, exag, cfg)
             p.write_bytes(audio)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
