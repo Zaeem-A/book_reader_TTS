@@ -357,6 +357,17 @@ def split_sentences(text):
     return [p.strip() for p in parts if p.strip()]
 
 
+def split_fragments(text):
+    """Split text at sentence-end (.!?…) AND mid-sentence punctuation (,;:).
+    Trailing punctuation is preserved on each fragment so Kokoro still produces
+    the right pause. Returning fragments instead of sentences lets us measure
+    each fragment's actual audio duration — which means the per-word timings
+    don't drift through long sentences full of commas."""
+    text = re.sub(r'\s+', ' ', text.strip())
+    parts = re.split(r'(?<=[.!?…,;:])\s+', text)
+    return [p.strip() for p in parts if p.strip()]
+
+
 # Kokoro is English-only — synthesizing non-Latin script wastes GPU and produces
 # garbled audio. We strip any sentence where >20% of its letters fall in common
 # non-Latin script blocks (Cyrillic, Hebrew, Arabic, Devanagari, Thai, CJK,
@@ -479,8 +490,8 @@ def synthesize(text, voice):
     providers = (["CUDAExecutionProvider", "CPUExecutionProvider"]
                  if _use_gpu else ["CPUExecutionProvider"])
 
-    sentences = split_sentences(text)
-    if not sentences:
+    fragments = split_fragments(text)
+    if not fragments:
         raise Exception("No text to synthesize")
 
     workers = None
@@ -488,11 +499,16 @@ def synthesize(text, voice):
         # Create fresh sessions — clean BFC arenas, no carry-over from previous book
         workers = _create_workers(n, providers, model_path, voices_path)
 
-        # Phonemize in main thread (espeak not thread-safe); done once, outside retry loop
+        # Phonemize in main thread (espeak not thread-safe); done once, outside retry loop.
+        # We also phonemize each word individually so we can weight the per-word
+        # timings inside a fragment by phoneme count, not letter count.
         phonemized = []
-        for s in sentences:
-            p = workers[0].tokenizer.phonemize(s, 'en-us')
-            phonemized.append((s, _split_phoneme_string(p)))
+        tok = workers[0].tokenizer
+        for f in fragments:
+            p = tok.phonemize(f, 'en-us')
+            words = f.split()
+            word_lens = [max(1, len(tok.phonemize(w, 'en-us').strip())) for w in words]
+            phonemized.append((f, _split_phoneme_string(p), word_lens))
         while True:
             k, m = divmod(len(phonemized), n)
             groups, start = [], 0
@@ -518,7 +534,7 @@ def synthesize(text, voice):
                     timings   = []
                     chunk_time = 0.0
 
-                    for s, p_chunks in group:
+                    for f, p_chunks, word_lens in group:
                         pieces = []
                         for p_chunk in p_chunks:
                             audio, _ = worker.create(
@@ -532,12 +548,12 @@ def synthesize(text, voice):
                         mp3_parts.append(enc.encode(pcm.tobytes()))
                         del seg, pieces, pcm
 
-                        ws = s.split()
+                        ws = f.split()
                         if ws:
-                            total = sum(len(w) for w in ws)
+                            total = sum(word_lens) if word_lens else len(ws)
                             t = chunk_time
-                            for w in ws:
-                                wd = len(w) / max(total, 1) * dur
+                            for w, wlen in zip(ws, word_lens):
+                                wd = wlen / max(total, 1) * dur
                                 timings.append({"word": w, "start": t, "end": t + wd})
                                 t += wd
                         chunk_time += dur
