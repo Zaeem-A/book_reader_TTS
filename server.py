@@ -189,12 +189,13 @@ def extract_text(data, ext):
 
 _cb_model = None
 _cb_default_conds = None  # built-in voice conds, captured at load so we can restore
+_cb_dtype = torch.float32  # dtype for T3 + its conditionals — bf16 on CUDA, fp32 otherwise
 _cb_model_lock  = threading.Lock()
 _cb_synthesis_lock = threading.Lock()  # Chatterbox is not thread-safe for concurrent synthesis
 
 
 def get_cb_model():
-    global _cb_model, _cb_default_conds
+    global _cb_model, _cb_default_conds, _cb_dtype
     if _cb_model is not None:
         return _cb_model
     with _cb_model_lock:
@@ -204,6 +205,17 @@ def get_cb_model():
         from chatterbox.tts import ChatterboxTTS
         device = "cuda" if torch.cuda.is_available() else "cpu"
         model = ChatterboxTTS.from_pretrained(device=device)
+
+        # Cast T3 (the autoregressive transformer — the bottleneck) to bfloat16.
+        # S3Gen (flow matching, 10 steps) stays fp32 — it's not the bottleneck and
+        # its mel/HifiGAN code is more sensitive to low precision.
+        if device == "cuda":
+            _cb_dtype = torch.bfloat16
+            model.t3 = model.t3.to(dtype=_cb_dtype)
+            if model.conds is not None:
+                # T3Cond.to() ignores long/int tensors — safe.
+                model.conds.t3 = model.conds.t3.to(dtype=_cb_dtype)
+            print("T3 cast to bfloat16 (S3Gen stays fp32)")
         _cb_default_conds = model.conds
         _cb_model = model
         print(f"Chatterbox ready — device={device}  sr={model.sr}")
@@ -269,8 +281,21 @@ def synthesize(text, voice, exaggeration=0.5, cfg_weight=0.5):
             voice_path = str(vp)
     if voice_path:
         model.prepare_conditionals(voice_path, exaggeration=exaggeration)
+        # prepare_conditionals creates conds in fp32; cast to T3's dtype.
+        model.conds.t3 = model.conds.t3.to(dtype=_cb_dtype)
     else:
-        model.conds = _cb_default_conds  # restore built-in voice
+        model.conds = _cb_default_conds  # already in _cb_dtype
+
+    # Replace emotion_adv with the user's exaggeration in T3's dtype, then use
+    # the dtype-rounded value as the exaggeration we pass to model.generate().
+    # This way model.generate's dtype-aware emotion_adv equality check sees no
+    # change and skips its rebuild (which would put emotion_adv back into fp32
+    # and crash the bf16 cond_enc Linears). Synthesis is serialized via
+    # _cb_synthesis_lock, so mutating shared conds in place is safe.
+    model.conds.t3.emotion_adv = torch.full(
+        (1, 1, 1), exaggeration, dtype=_cb_dtype, device=model.device
+    )
+    gen_exag = float(model.conds.t3.emotion_adv.item())
 
     paragraphs = [p.strip() for p in re.split(r'\n\n+', text) if p.strip()]
     if not paragraphs:
@@ -291,7 +316,7 @@ def synthesize(text, voice, exaggeration=0.5, cfg_weight=0.5):
             with torch.no_grad():
                 wav = model.generate(
                     s,
-                    exaggeration=exaggeration,
+                    exaggeration=gen_exag,
                     cfg_weight=cfg_weight,
                 )
 

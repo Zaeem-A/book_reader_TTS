@@ -552,6 +552,11 @@
             background: var(--highlight-bg);
             color: var(--highlight);
         }
+        body.fast-read .word.active .word-mid {
+            color: #ff1a1a;
+            font-weight: 700;
+            text-shadow: 0 0 6px rgba(255, 26, 26, 0.55);
+        }
 
         .page-nav {
             display: flex;
@@ -1345,6 +1350,7 @@
             document.getElementById('docTitle').textContent = currentBook.title;
             audio.src = `/api/books/${bookId}/audio`;
             audio.playbackRate = 1;
+            document.body.classList.remove('fast-read');
             document.querySelectorAll('.speed-btn').forEach(b =>
                 b.classList.toggle('active', b.dataset.speed === '1'));
 
@@ -1386,11 +1392,20 @@
             if (pages.length === 0) pages = [[]];
         }
 
+        function renderWordHtml(w) {
+            // Wrap the middle character in .word-mid so we can color it (e.g. red at 2×).
+            if (w.length <= 1) return `<span class="word-mid">${escapeHtml(w)}</span>`;
+            const m = Math.floor(w.length / 2);
+            return escapeHtml(w.slice(0, m))
+                + `<span class="word-mid">${escapeHtml(w.charAt(m))}</span>`
+                + escapeHtml(w.slice(m + 1));
+        }
+
         function renderPages() {
             const area = document.getElementById('readingArea');
             area.innerHTML = pages.map((idxs, pn) => `
                 <div class="page${pn === 0 ? ' current' : ''}" id="page-${pn}">
-                    ${idxs.map(i => `<span class="word" id="w${i}" data-i="${i}">${escapeHtml(words[i].word)} </span>`).join('')}
+                    ${idxs.map(i => `<span class="word" id="w${i}" data-i="${i}">${renderWordHtml(words[i].word)} </span>`).join('')}
                 </div>
             `).join('');
             currentPage = 0;
@@ -1469,7 +1484,9 @@
 
         document.querySelectorAll('.speed-btn').forEach(b => {
             b.onclick = () => {
-                audio.playbackRate = parseFloat(b.dataset.speed);
+                const s = parseFloat(b.dataset.speed);
+                audio.playbackRate = s;
+                document.body.classList.toggle('fast-read', s >= 2);
                 document.querySelectorAll('.speed-btn').forEach(x => x.classList.remove('active'));
                 b.classList.add('active');
             };
@@ -1482,7 +1499,7 @@
             audio.currentTime = ratio * (audio.duration || 0);
         };
 
-        audio.addEventListener('timeupdate', () => {
+        function updateHighlight() {
             const t = audio.currentTime;
             const dur = audio.duration || 0;
             if (dur) {
@@ -1491,8 +1508,7 @@
                 document.getElementById('timeDisplay').textContent =
                     fmt(t) + ' / ' + fmt(dur);
             }
-            // find active word — start from current to avoid full scan each tick
-            let idx = findWordAt(t);
+            const idx = findWordAt(t);
             if (idx !== currentIdx) {
                 if (currentIdx >= 0) {
                     document.getElementById('w' + currentIdx)?.classList.remove('active');
@@ -1506,7 +1522,22 @@
                 currentIdx = idx;
                 schedulePositionSave();
             }
+        }
+
+        // While playing, drive the highlighter from requestAnimationFrame (~60Hz)
+        // instead of the timeupdate event (~4Hz). Otherwise at 2× a single word
+        // can be shorter than one tick interval and gets skipped visually.
+        let highlightRafId = null;
+        function highlightLoop() {
+            if (audio.paused) { highlightRafId = null; return; }
+            updateHighlight();
+            highlightRafId = requestAnimationFrame(highlightLoop);
+        }
+        audio.addEventListener('play', () => {
+            if (highlightRafId == null) highlightRafId = requestAnimationFrame(highlightLoop);
         });
+        // timeupdate stays as a fallback (covers seek-while-paused).
+        audio.addEventListener('timeupdate', updateHighlight);
 
         function findWordAt(t) {
             // binary search by start time
