@@ -25,15 +25,28 @@
             --danger: #c46b6b;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { height: 100%; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            height: 100%;
+        }
+
         body {
             background: var(--bg);
             color: var(--text);
             font-family: 'DM Sans', sans-serif;
             overflow: hidden;
         }
-        button { font-family: inherit; cursor: pointer; }
+
+        button {
+            font-family: inherit;
+            cursor: pointer;
+        }
 
         .view {
             display: none;
@@ -42,7 +55,10 @@
             max-width: 720px;
             margin: 0 auto;
         }
-        .view.active { display: flex; }
+
+        .view.active {
+            display: flex;
+        }
 
         /* ---------- Library ---------- */
         .lib-header {
@@ -52,12 +68,14 @@
             justify-content: space-between;
             flex-shrink: 0;
         }
+
         .logo {
             font-family: 'Lora', serif;
             font-size: 1.6rem;
             color: var(--accent);
             letter-spacing: -0.02em;
         }
+
         .add-btn {
             background: var(--accent);
             border: none;
@@ -88,6 +106,7 @@
             font-size: 1.05rem;
             line-height: 1.6;
         }
+
         .lib-empty .small {
             font-family: 'DM Sans', sans-serif;
             font-style: normal;
@@ -111,9 +130,19 @@
             -webkit-user-select: none;
             -webkit-touch-callout: none;
         }
-        .tile.ready { cursor: pointer; }
-        .tile.ready:hover { border-color: var(--border-strong); background: var(--surface-2); }
-        .tile.failed { border-color: rgba(196, 107, 107, 0.4); }
+
+        .tile.ready {
+            cursor: pointer;
+        }
+
+        .tile.ready:hover {
+            border-color: var(--border-strong);
+            background: var(--surface-2);
+        }
+
+        .tile.failed {
+            border-color: rgba(196, 107, 107, 0.4);
+        }
 
         .tile-title {
             font-family: 'Lora', serif;
@@ -126,6 +155,7 @@
             line-clamp: 2;
             -webkit-box-orient: vertical;
         }
+
         .tile-meta {
             font-size: 0.75rem;
             color: var(--text-dim);
@@ -134,22 +164,29 @@
             gap: 10px;
             flex-wrap: wrap;
         }
-        .tile-meta .dot { color: var(--text-faint); }
+
+        .tile-meta .dot {
+            color: var(--text-faint);
+        }
+
         .tile-voice {
             color: var(--accent);
             font-weight: 500;
         }
+
         .tile-progress-wrap {
             display: flex;
             flex-direction: column;
             gap: 6px;
         }
+
         .tile-progress-label {
             font-size: 0.75rem;
             color: var(--text-dim);
             display: flex;
             justify-content: space-between;
         }
+
         .tile-progress-bar {
             width: 100%;
             height: 3px;
@@ -157,12 +194,14 @@
             border-radius: 2px;
             overflow: hidden;
         }
+
         .tile-progress-fill {
             height: 100%;
             background: var(--accent);
             width: 0%;
             transition: width 0.4s linear;
         }
+
         .tile-error {
             font-size: 0.78rem;
             color: var(--danger);
@@ -176,7 +215,11 @@
             z-index: 100;
             display: none;
         }
-        .ctx-overlay.open { display: block; }
+
+        .ctx-overlay.open {
+            display: block;
+        }
+
         .ctx-menu {
             position: absolute;
             background: var(--surface-2);
@@ -186,6 +229,7 @@
             min-width: 180px;
             box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
         }
+
         .ctx-item {
             display: block;
             width: 100%;
@@ -197,8 +241,14 @@
             padding: 10px 12px;
             border-radius: 6px;
         }
-        .ctx-item:hover { background: var(--border); }
-        .ctx-item.danger { color: var(--danger); }
+
+        .ctx-item:hover {
+            background: var(--border);
+        }
+
+        .ctx-item.danger {
+            color: var(--danger);
+        }
 
         /* ---------- Voice picker ---------- */
         .vp-header {
@@ -208,6 +258,7 @@
             gap: 14px;
             flex-shrink: 0;
         }
+
         .back-btn {
             background: none;
             border: none;
@@ -216,20 +267,45 @@
             line-height: 1;
             padding: 4px 8px 4px 0;
         }
+
         .vp-title {
             font-family: 'Lora', serif;
             font-size: 1.2rem;
             color: var(--text);
         }
+
         .vp-subtitle {
             font-size: 0.8rem;
             color: var(--text-dim);
             margin-top: 2px;
         }
+
         .vp-body {
             flex: 1;
             overflow-y: auto;
             padding: 4px 20px 20px;
+        }
+
+        .upload-notice {
+            background: var(--accent-soft);
+            border: 1px solid rgba(193, 125, 60, 0.35);
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+            font-size: 0.82rem;
+            color: var(--text);
+            line-height: 1.45;
+        }
+
+        .upload-notice strong {
+            font-weight: 600;
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .upload-notice div {
+            color: var(--text-dim);
+            font-size: 0.76rem;
         }
 
         .voice-card {
@@ -243,14 +319,17 @@
             gap: 14px;
             transition: border-color 0.15s, background 0.15s;
         }
+
         .voice-card.used {
             border-color: rgba(193, 125, 60, 0.45);
             background: var(--accent-soft);
         }
+
         .voice-card.selected {
             border-color: var(--accent);
             box-shadow: 0 0 0 1px var(--accent) inset;
         }
+
         .voice-play {
             width: 36px;
             height: 36px;
@@ -265,33 +344,43 @@
             flex-shrink: 0;
             padding-left: 2px;
         }
+
         .voice-card.used .voice-play {
             background: var(--accent);
             border-color: var(--accent);
             color: #fff;
         }
+
         .voice-card.playing .voice-play {
             background: var(--accent);
             border-color: var(--accent);
             color: #fff;
         }
-        .voice-info { flex: 1; min-width: 0; }
+
+        .voice-info {
+            flex: 1;
+            min-width: 0;
+        }
+
         .voice-name {
             font-size: 0.98rem;
             color: var(--text);
             font-weight: 500;
         }
+
         .voice-desc {
             font-size: 0.78rem;
             color: var(--text-dim);
             margin-top: 2px;
         }
+
         .voice-badge {
             font-size: 0.7rem;
             color: var(--accent);
             margin-top: 4px;
             letter-spacing: 0.04em;
         }
+
         .voice-radio {
             width: 18px;
             height: 18px;
@@ -300,9 +389,11 @@
             flex-shrink: 0;
             position: relative;
         }
+
         .voice-card.selected .voice-radio {
             border-color: var(--accent);
         }
+
         .voice-card.selected .voice-radio::after {
             content: '';
             position: absolute;
@@ -316,6 +407,7 @@
             border-top: 1px solid var(--border);
             flex-shrink: 0;
         }
+
         .vp-eta {
             text-align: center;
             font-size: 0.8rem;
@@ -323,6 +415,7 @@
             margin-bottom: 10px;
             min-height: 1.2em;
         }
+
         .vp-submit {
             width: 100%;
             padding: 15px;
@@ -335,7 +428,10 @@
             opacity: 0.35;
             transition: opacity 0.15s;
         }
-        .vp-submit.ready { opacity: 1; }
+
+        .vp-submit.ready {
+            opacity: 1;
+        }
 
         /* ---------- Reader ---------- */
         .reader-header {
@@ -347,6 +443,7 @@
             flex-shrink: 0;
             gap: 10px;
         }
+
         .doc-title {
             font-family: 'Lora', serif;
             font-size: 0.95rem;
@@ -357,12 +454,71 @@
             flex: 1;
             text-align: center;
         }
+
         .page-indicator {
             font-size: 0.72rem;
             color: var(--text-faint);
             font-variant-numeric: tabular-nums;
             min-width: 56px;
             text-align: right;
+        }
+
+        .extend-banner {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 18px;
+            background: var(--accent-soft);
+            border-bottom: 1px solid rgba(193, 125, 60, 0.35);
+            font-size: 0.82rem;
+            color: var(--text);
+            flex-shrink: 0;
+        }
+
+        .extend-banner.show {
+            display: flex;
+        }
+
+        .extend-banner-text {
+            line-height: 1.4;
+        }
+
+        .extend-banner-text .small {
+            display: block;
+            font-size: 0.72rem;
+            color: var(--text-dim);
+            margin-top: 1px;
+        }
+
+        .extend-banner-btn {
+            background: var(--accent);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            padding: 7px 14px;
+            font-size: 0.82rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .extend-banner-btn:hover {
+            opacity: 0.9;
+        }
+
+        .modal-slider-row {
+            display: grid;
+            grid-template-columns: 1fr 44px;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+
+        .modal-slider-value {
+            font-size: 1rem;
+            color: var(--text);
+            text-align: right;
+            font-variant-numeric: tabular-nums;
         }
 
         .reading-area {
@@ -375,12 +531,17 @@
             font-size: 1.12rem;
             color: var(--text);
         }
+
         .page {
             display: none;
             height: 100%;
             overflow-y: auto;
         }
-        .page.current { display: block; }
+
+        .page.current {
+            display: block;
+        }
+
         .word {
             display: inline;
             border-radius: 3px;
@@ -388,6 +549,7 @@
             transition: background 0.08s, color 0.08s;
             cursor: pointer;
         }
+
         .word.active {
             background: var(--highlight-bg);
             color: var(--highlight);
@@ -399,6 +561,7 @@
             padding: 4px 20px 0;
             flex-shrink: 0;
         }
+
         .page-arrow {
             background: none;
             border: none;
@@ -407,7 +570,11 @@
             padding: 6px 10px;
             border-radius: 6px;
         }
-        .page-arrow:disabled { color: var(--text-faint); opacity: 0.4; }
+
+        .page-arrow:disabled {
+            color: var(--text-faint);
+            opacity: 0.4;
+        }
 
         .controls {
             padding: 12px 20px 32px;
@@ -418,6 +585,7 @@
             flex-shrink: 0;
             background: var(--bg);
         }
+
         .progress-bar {
             width: 100%;
             height: 3px;
@@ -426,6 +594,7 @@
             cursor: pointer;
             position: relative;
         }
+
         .progress-fill {
             height: 100%;
             background: var(--accent);
@@ -433,13 +602,19 @@
             width: 0%;
             pointer-events: none;
         }
+
         .control-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 12px;
         }
-        .speed-btns { display: flex; gap: 6px; }
+
+        .speed-btns {
+            display: flex;
+            gap: 6px;
+        }
+
         .speed-btn {
             padding: 7px 13px;
             background: var(--surface);
@@ -449,11 +624,13 @@
             font-size: 0.8rem;
             transition: all 0.15s;
         }
+
         .speed-btn.active {
             background: var(--accent);
             border-color: var(--accent);
             color: #fff;
         }
+
         .play-pause {
             width: 54px;
             height: 54px;
@@ -467,6 +644,7 @@
             justify-content: center;
             flex-shrink: 0;
         }
+
         .time-display {
             font-size: 0.78rem;
             color: var(--text-dim);
@@ -486,7 +664,11 @@
             justify-content: center;
             padding: 20px;
         }
-        .modal-overlay.open { display: flex; }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
         .modal {
             background: var(--surface-2);
             border: 1px solid var(--border-strong);
@@ -495,18 +677,21 @@
             max-width: 360px;
             width: 100%;
         }
+
         .modal h3 {
             font-family: 'Lora', serif;
             font-size: 1.15rem;
             margin-bottom: 12px;
             color: var(--text);
         }
+
         .modal p {
             font-size: 0.88rem;
             color: var(--text-dim);
             margin-bottom: 16px;
             line-height: 1.5;
         }
+
         .modal input {
             width: 100%;
             background: var(--bg);
@@ -518,12 +703,18 @@
             padding: 11px 14px;
             margin-bottom: 16px;
         }
-        .modal input:focus { outline: none; border-color: var(--accent); }
+
+        .modal input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
         .modal-actions {
             display: flex;
             gap: 10px;
             justify-content: flex-end;
         }
+
         .modal-btn {
             background: var(--surface);
             border: 1px solid var(--border-strong);
@@ -532,8 +723,18 @@
             padding: 9px 16px;
             border-radius: 7px;
         }
-        .modal-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-        .modal-btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+        .modal-btn.primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        .modal-btn.danger {
+            background: var(--danger);
+            border-color: var(--danger);
+            color: #fff;
+        }
     </style>
 </head>
 
@@ -542,7 +743,7 @@
     <!-- LIBRARY -->
     <div id="library" class="view active">
         <div class="lib-header">
-            <div class="logo">reader.</div>
+            <div class="logo">قاری</div>
             <button class="add-btn" id="addBtn" title="Add book">+</button>
         </div>
         <div class="lib-body" id="libBody"></div>
@@ -570,6 +771,13 @@
             <button class="back-btn" id="readerBack">←</button>
             <span class="doc-title" id="docTitle">—</span>
             <span class="page-indicator" id="pageIndicator">— / —</span>
+        </div>
+        <div class="extend-banner" id="extendBanner">
+            <div class="extend-banner-text">
+                Nearing the end of what's converted.
+                <span class="small" id="extendBannerSub"></span>
+            </div>
+            <button class="extend-banner-btn" id="extendBannerBtn">Add pages</button>
         </div>
         <div class="reading-area" id="readingArea"></div>
         <div class="page-nav">
@@ -609,14 +817,14 @@
     <script>
         // ---------- voice metadata ----------
         const VOICE_META = {
-            "af_heart":   {name: "Heart",   desc: "American  •  Female"},
-            "af_bella":   {name: "Bella",   desc: "American  •  Female"},
-            "af_nicole":  {name: "Nicole",  desc: "American  •  Female"},
-            "af_sarah":   {name: "Sarah",   desc: "American  •  Female"},
-            "am_adam":    {name: "Adam",    desc: "American  •  Male"},
-            "am_michael": {name: "Michael", desc: "American  •  Male"},
-            "bf_emma":    {name: "Emma",    desc: "British  •  Female"},
-            "bm_george":  {name: "George",  desc: "British  •  Male"},
+            "af_heart": { name: "Heart", desc: "American  •  Female" },
+            "af_bella": { name: "Bella", desc: "American  •  Female" },
+            "af_nicole": { name: "Nicole", desc: "American  •  Female" },
+            "af_sarah": { name: "Sarah", desc: "American  •  Female" },
+            "am_adam": { name: "Adam", desc: "American  •  Male" },
+            "am_michael": { name: "Michael", desc: "American  •  Male" },
+            "bf_emma": { name: "Emma", desc: "British  •  Female" },
+            "bm_george": { name: "George", desc: "British  •  Male" },
         };
 
         // ---------- helpers ----------
@@ -688,8 +896,19 @@
                 if (b.status === 'processing') {
                     const pct = (tileProgress(b) * 100).toFixed(0);
                     const rem = tileRemaining(b);
+                    const synth = b.pages_synthesized || 0;
+                    const total = b.total_pages || 0;
+                    let label = 'Generating…';
+                    if (total > 0) {
+                        label = synth === 0
+                            ? `Converting pages 1–${Math.min(20, total)} of ${total}`
+                            : `Adding pages — at ${synth}/${total}`;
+                    }
+                    // Mid-extend books have valid audio for what's already been
+                    // converted, so let the user open them and keep reading.
+                    const openable = synth > 0;
                     return `
-                    <div class="tile processing" data-id="${b.id}">
+                    <div class="tile processing${openable ? ' ready' : ''}" data-id="${b.id}">
                         <div class="tile-title">${escapeHtml(b.title)}</div>
                         <div class="tile-meta">
                             <span class="tile-voice">${voice}</span>
@@ -698,7 +917,7 @@
                         </div>
                         <div class="tile-progress-wrap">
                             <div class="tile-progress-label">
-                                <span>Generating…</span>
+                                <span>${label}</span>
                                 <span>${fmtETA(rem)}</span>
                             </div>
                             <div class="tile-progress-bar">
@@ -720,15 +939,19 @@
                     </div>`;
                 }
                 const mins = b.total_duration ? Math.round(b.total_duration / 60) : 0;
+                const synth = b.pages_synthesized || 0;
+                const total = b.total_pages || 0;
+                const pageBadge = (total > 0 && synth < total)
+                    ? `<span class="dot">•</span><span>${synth}/${total} pages</span>`
+                    : '';
                 return `
                 <div class="tile ready" data-id="${b.id}">
                     <div class="tile-title">${escapeHtml(b.title)}</div>
                     <div class="tile-meta">
                         <span class="tile-voice">${voice}</span>
                         <span class="dot">•</span>
-                        <span>${(b.word_count || 0).toLocaleString()} words</span>
-                        <span class="dot">•</span>
                         <span>${mins} min</span>
+                        ${pageBadge}
                     </div>
                 </div>`;
             }).join('');
@@ -736,7 +959,7 @@
 
         function escapeHtml(s) {
             return String(s).replace(/[&<>"']/g, c =>
-                ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+                ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
 
         // ---------- tile interactions ----------
@@ -764,11 +987,11 @@
                 openContextMenu(parseInt(tile.dataset.id), lpTouch.clientX, lpTouch.clientY);
                 lpTimer = null;
             }, 480);
-        }, {passive: true});
-        ['touchend','touchcancel','touchmove','scroll'].forEach(evt =>
+        }, { passive: true });
+        ['touchend', 'touchcancel', 'touchmove', 'scroll'].forEach(evt =>
             document.getElementById('libBody').addEventListener(evt, () => {
                 if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
-            }, {passive: true})
+            }, { passive: true })
         );
 
         // ---------- context menu ----------
@@ -777,9 +1000,9 @@
             if (!book) return;
             const menu = document.getElementById('ctxMenu');
             const items = [
-                {label: 'Rename', action: () => renameBook(book)},
-                {label: 'Change voice', action: () => openChangeVoice(book)},
-                {label: 'Delete', cls: 'danger', action: () => deleteBook(book)},
+                { label: 'Rename', action: () => renameBook(book) },
+                { label: 'Change voice', action: () => openChangeVoice(book) },
+                { label: 'Delete', cls: 'danger', action: () => deleteBook(book) },
             ];
             menu.innerHTML = items.map((it, i) =>
                 `<button class="ctx-item ${it.cls || ''}" data-i="${i}">${it.label}</button>`
@@ -835,8 +1058,8 @@
                 try {
                     await api(`/api/books/${book.id}`, {
                         method: 'PATCH',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({title}),
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title }),
                     });
                     m.close();
                     refreshLibrary();
@@ -844,6 +1067,120 @@
             };
             m.el.querySelector('#rnSave').onclick = save;
             input.addEventListener('keydown', e => { if (e.key === 'Enter') save(); });
+        }
+
+        // ---------- background extend (don't kill the reading session) ----------
+        let extendingCount = 0;     // # pages currently being added (0 = idle)
+        let extendPollId = null;    // setInterval handle for /api/books/:id polling
+        let extendError = null;     // last error message, shown in banner
+
+        function extendBook(book) {
+            if (extendingCount > 0) return;  // already extending
+            const remaining = (book.total_pages || 0) - (book.pages_synthesized || 0);
+            if (remaining <= 0) return;
+            const cap = Math.min(20, remaining);
+            const initial = Math.min(20, cap);
+            const m = modal(`
+                <h3>Convert more pages</h3>
+                <p>
+                    Currently converted: ${book.pages_synthesized} of ${book.total_pages} pages.<br>
+                    How many more pages to convert?
+                </p>
+                <div class="modal-slider-row">
+                    <input type="range" id="extSlider" min="1" max="${cap}" value="${initial}"
+                           style="width:100%">
+                    <span class="modal-slider-value" id="extValue">${initial}</span>
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-btn" id="extCancel">Cancel</button>
+                    <button class="modal-btn primary" id="extOK">Convert</button>
+                </div>
+            `);
+            const slider = m.el.querySelector('#extSlider');
+            const valueEl = m.el.querySelector('#extValue');
+            slider.oninput = () => { valueEl.textContent = slider.value; };
+            m.el.querySelector('#extCancel').onclick = m.close;
+            m.el.querySelector('#extOK').onclick = async () => {
+                const count = parseInt(slider.value, 10);
+                const prevSynth = book.pages_synthesized || 0;
+                try {
+                    await api(`/api/books/${book.id}/extend`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ count }),
+                    });
+                } catch (e) { alert(e); return; }
+                m.close();
+                extendingCount = count;
+                extendError = null;
+                updateExtendBanner();
+                startExtendPolling(book.id, prevSynth);
+            };
+        }
+
+        function startExtendPolling(bookId, prevSynth) {
+            stopExtendPolling();
+            extendPollId = setInterval(async () => {
+                if (!currentBook || currentBook.id !== bookId) {
+                    stopExtendPolling();
+                    return;
+                }
+                let row;
+                try {
+                    row = await api(`/api/books/${bookId}`);
+                } catch (e) { return; }  // transient — try again next tick
+
+                if (row.status === 'ready' && (row.pages_synthesized || 0) > prevSynth) {
+                    stopExtendPolling();
+                    await applyExtendedContent(row);
+                    extendingCount = 0;
+                    updateExtendBanner();
+                } else if (row.status === 'failed') {
+                    stopExtendPolling();
+                    extendingCount = 0;
+                    extendError = row.error || 'Extend failed';
+                    updateExtendBanner();
+                }
+            }, 3000);
+        }
+
+        function stopExtendPolling() {
+            if (extendPollId !== null) {
+                clearInterval(extendPollId);
+                extendPollId = null;
+            }
+        }
+
+        async function applyExtendedContent(newBook) {
+            // Capture playback state so we can restore it after swapping the source.
+            const wasPlaying = !audio.paused;
+            const savedTime = audio.currentTime;
+            const savedIdx = currentIdx;
+
+            currentBook = newBook;
+            const v = newBook.pages_synthesized || 0;
+            try {
+                const syncData = await fetch(`/api/books/${newBook.id}/sync?v=${v}`)
+                    .then(r => r.json());
+                words = syncData.words || [];
+            } catch (e) {
+                extendError = 'Failed to load extended sync';
+                return;
+            }
+
+            paginate();
+            renderPages();
+            if (savedIdx >= 0 && savedIdx < words.length) {
+                switchToPage(findPageForWord(savedIdx));
+            }
+            // Force re-highlight on next tick by clearing currentIdx
+            currentIdx = -1;
+
+            audio.src = `/api/books/${newBook.id}/audio?v=${v}`;
+            audio.addEventListener('loadedmetadata', () => {
+                try { audio.currentTime = savedTime; } catch (e) { }
+                if (wasPlaying) audio.play().catch(() => { });
+            }, { once: true });
         }
 
         function deleteBook(book) {
@@ -858,7 +1195,7 @@
             m.el.querySelector('#delCancel').onclick = m.close;
             m.el.querySelector('#delOK').onclick = async () => {
                 try {
-                    await api(`/api/books/${book.id}`, {method: 'DELETE'});
+                    await api(`/api/books/${book.id}`, { method: 'DELETE' });
                     m.close();
                     refreshLibrary();
                 } catch (e) { alert(e); }
@@ -871,12 +1208,12 @@
         fileInput.onchange = () => {
             const f = fileInput.files[0];
             if (!f) return;
-            openVoicePicker({mode: 'new', file: f, currentVoice: null});
+            openVoicePicker({ mode: 'new', file: f, currentVoice: null });
             fileInput.value = '';
         };
 
         function openChangeVoice(book) {
-            openVoicePicker({mode: 'change', book, currentVoice: book.voice});
+            openVoicePicker({ mode: 'change', book, currentVoice: book.voice });
         }
 
         // ---------- voice picker ----------
@@ -906,8 +1243,13 @@
 
         function renderVoicePicker() {
             const body = document.getElementById('vpBody');
-            body.innerHTML = voices.map(v => {
-                const meta = VOICE_META[v.id] || {name: v.id, desc: ''};
+            const notice = vpState.mode === 'new' ? `
+                <div class="upload-notice">
+                    <strong>Heads up — only the first 20 pages will be converted.</strong>
+                    <div>You can add more from the reader once you're near the end.</div>
+                </div>` : '';
+            body.innerHTML = notice + voices.map(v => {
+                const meta = VOICE_META[v.id] || { name: v.id, desc: '' };
                 const used = v.count > 0;
                 const selected = vpState.selected === v.id;
                 let badge = '';
@@ -983,7 +1325,7 @@
                     const fd = new FormData();
                     fd.append('file', vpState.file);
                     fd.append('voice', voice);
-                    const res = await fetch('/api/books', {method: 'POST', body: fd});
+                    const res = await fetch('/api/books', { method: 'POST', body: fd });
                     if (!res.ok) {
                         const j = await res.json().catch(() => ({}));
                         throw j.error || res.statusText;
@@ -991,8 +1333,8 @@
                 } else {
                     await api(`/api/books/${vpState.book.id}/regenerate`, {
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({voice}),
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ voice }),
                     });
                 }
                 showView('library');
@@ -1012,7 +1354,7 @@
             }
             stopSample();
             sampleAudio.src = `/api/voices/${voice}/sample`;
-            sampleAudio.play().catch(() => {});
+            sampleAudio.play().catch(() => { });
             samplePlayingCard = card;
             card.classList.add('playing');
             const playBtn = card.querySelector('.voice-play');
@@ -1043,12 +1385,14 @@
         async function openReader(bookId) {
             try {
                 currentBook = await api(`/api/books/${bookId}`);
-                const syncData = await fetch(`/api/books/${bookId}/sync`).then(r => r.json());
+                const v = currentBook.pages_synthesized || 0;
+                const syncData = await fetch(`/api/books/${bookId}/sync?v=${v}`)
+                    .then(r => r.json());
                 words = syncData.words || [];
             } catch (e) { alert(e); return; }
 
             document.getElementById('docTitle').textContent = currentBook.title;
-            audio.src = `/api/books/${bookId}/audio`;
+            audio.src = `/api/books/${bookId}/audio?v=${currentBook.pages_synthesized || 0}`;
             audio.playbackRate = 1;
             document.querySelectorAll('.speed-btn').forEach(b =>
                 b.classList.toggle('active', b.dataset.speed === '1'));
@@ -1061,7 +1405,7 @@
             if (idx > 0 && words[idx]) {
                 audio.addEventListener('loadedmetadata', () => {
                     audio.currentTime = words[idx].start;
-                }, {once: true});
+                }, { once: true });
                 switchToPage(findPageForWord(idx));
             } else {
                 switchToPage(0);
@@ -1070,8 +1414,67 @@
             lastSavedIdx = currentBook.last_word_index || 0;
 
             document.getElementById('playPauseBtn').textContent = '▶';
+            // If the book is mid-extend, pick up polling so the banner updates
+            // and audio/sync swap in when the new pages are ready.
+            stopExtendPolling();
+            extendError = null;
+            if (currentBook.status === 'processing'
+                && (currentBook.pages_synthesized || 0) > 0) {
+                extendingCount = 1;
+                startExtendPolling(currentBook.id, currentBook.pages_synthesized || 0);
+            } else {
+                extendingCount = 0;
+            }
+            updateExtendBanner();
             showView('reader');
         }
+
+        function updateExtendBanner() {
+            const banner = document.getElementById('extendBanner');
+            const btn = document.getElementById('extendBannerBtn');
+            const sub = document.getElementById('extendBannerSub');
+            const textBox = banner.querySelector('.extend-banner-text');
+            if (!currentBook) { banner.classList.remove('show'); return; }
+
+            const synth = currentBook.pages_synthesized || 0;
+            const total = currentBook.total_pages || 0;
+
+            // Extending — show progress, hide the button.
+            if (extendingCount > 0) {
+                textBox.firstChild.nodeValue = `Adding ${extendingCount} page${extendingCount === 1 ? '' : 's'}… ${synth}/${total} so far.`;
+                sub.textContent = 'You can keep reading. The new pages appear when ready.';
+                btn.style.display = 'none';
+                banner.classList.add('show');
+                return;
+            }
+
+            // Last extend failed — surface the error inline, leave button visible.
+            if (extendError) {
+                textBox.firstChild.nodeValue = 'Add pages failed.';
+                sub.textContent = extendError;
+                btn.style.display = '';
+                btn.textContent = 'Try again';
+                banner.classList.add('show');
+                return;
+            }
+
+            // Reset button copy in the normal path.
+            btn.style.display = '';
+            btn.textContent = 'Add pages';
+
+            if (synth >= total) { banner.classList.remove('show'); return; }
+            const progress = words.length > 0 && currentIdx >= 0
+                ? currentIdx / words.length : 0;
+            if (progress < 0.75) { banner.classList.remove('show'); return; }
+            textBox.firstChild.nodeValue = `Nearing the end of what's converted.`;
+            sub.textContent =
+                `Page ${synth} of ${total} converted. Up to ${Math.min(20, total - synth)} more available.`;
+            banner.classList.add('show');
+        }
+
+        document.getElementById('extendBannerBtn').onclick = () => {
+            if (currentBook) extendBook(currentBook);
+        };
 
         function paginate() {
             pages = [];
@@ -1210,6 +1613,7 @@
                 }
                 currentIdx = idx;
                 schedulePositionSave();
+                updateExtendBanner();
             }
         });
 
@@ -1245,15 +1649,18 @@
             lastSavedIdx = idx;
             fetch(`/api/books/${currentBook.id}`, {
                 method: 'PATCH',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({last_word_index: idx}),
-            }).catch(() => {});
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ last_word_index: idx }),
+            }).catch(() => { });
         }
 
         document.getElementById('readerBack').onclick = () => {
             audio.pause();
             document.getElementById('playPauseBtn').textContent = '▶';
             savePosition(true);
+            stopExtendPolling();
+            extendingCount = 0;
+            extendError = null;
             currentBook = null;
             showView('library');
             refreshLibrary();
@@ -1265,9 +1672,9 @@
             try {
                 navigator.sendBeacon(
                     `/api/books/${currentBook.id}/position`,
-                    new Blob([JSON.stringify({idx: currentIdx})], {type: 'application/json'})
+                    new Blob([JSON.stringify({ idx: currentIdx })], { type: 'application/json' })
                 );
-            } catch (e) {}
+            } catch (e) { }
         });
 
         // ---------- init ----------

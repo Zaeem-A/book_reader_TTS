@@ -60,6 +60,11 @@ def db():
     return conn
 
 
+WORDS_PER_PAGE = 250
+INITIAL_CHUNK_PAGES = 20
+MAX_CHUNK_PAGES = 20
+
+
 def init_db():
     with db() as conn:
         conn.executescript("""
@@ -82,6 +87,11 @@ def init_db():
             value TEXT
         );
         """)
+        cols = {r['name'] for r in conn.execute("PRAGMA table_info(books)").fetchall()}
+        if 'total_pages' not in cols:
+            conn.execute("ALTER TABLE books ADD COLUMN total_pages INTEGER NOT NULL DEFAULT 0")
+        if 'pages_synthesized' not in cols:
+            conn.execute("ALTER TABLE books ADD COLUMN pages_synthesized INTEGER NOT NULL DEFAULT 0")
         conn.execute(
             "UPDATE books SET status='failed', error='Server restarted during processing' "
             "WHERE status='processing'"
@@ -347,6 +357,99 @@ def split_sentences(text):
     return [p.strip() for p in parts if p.strip()]
 
 
+# Kokoro is English-only — synthesizing non-Latin script wastes GPU and produces
+# garbled audio. We strip any sentence where >20% of its letters fall in common
+# non-Latin script blocks (Cyrillic, Hebrew, Arabic, Devanagari, Thai, CJK,
+# Hangul). Latin-script content with diacritics passes through.
+_NON_LATIN_SCRIPT = re.compile(
+    '[Ѐ-ӿ'   # Cyrillic
+    '֐-׿'    # Hebrew
+    '؀-ۿ'    # Arabic
+    'ऀ-ॿ'    # Devanagari
+    '฀-๿'    # Thai
+    '぀-ヿ'    # Hiragana + Katakana
+    '一-鿿'    # CJK Unified Ideographs
+    '가-힯'    # Hangul syllables
+    ']'
+)
+
+
+def _sentence_is_english(s):
+    letters = [c for c in s if c.isalpha()]
+    if not letters:
+        return True  # punctuation / digits only — harmless, keep
+    non_latin = sum(1 for c in letters if _NON_LATIN_SCRIPT.search(c))
+    return non_latin / len(letters) <= 0.20
+
+
+def filter_non_english(text):
+    paragraphs = re.split(r'\n\n+', text)
+    kept_paragraphs = []
+    for p in paragraphs:
+        sents = [s for s in split_sentences(p) if _sentence_is_english(s)]
+        if sents:
+            kept_paragraphs.append(' '.join(sents))
+    return '\n\n'.join(kept_paragraphs)
+
+
+def split_pages(text, words_per_page=WORDS_PER_PAGE):
+    """Split source text into ~words_per_page chunks, preserving paragraph breaks.
+    Paragraphs are kept intact when possible; long paragraphs are split at sentence
+    boundaries. Each returned string can be passed to synthesize() directly.
+    """
+    paragraphs = [p.strip() for p in re.split(r'\n\n+', text) if p.strip()]
+    pages = []
+    buf = []          # list of paragraph strings in the current page
+    buf_words = 0
+    for para in paragraphs:
+        pw = len(para.split())
+        if pw <= words_per_page:
+            if buf_words + pw <= words_per_page or not buf:
+                buf.append(para)
+                buf_words += pw
+            else:
+                pages.append('\n\n'.join(buf))
+                buf, buf_words = [para], pw
+        else:
+            # Paragraph alone is bigger than a page — flush current buf, then
+            # split this paragraph into sentence-grouped pages.
+            if buf:
+                pages.append('\n\n'.join(buf))
+                buf, buf_words = [], 0
+            sents = split_sentences(para)
+            sbuf, sbuf_words = [], 0
+            for s in sents:
+                sw = len(s.split())
+                if sbuf_words + sw > words_per_page and sbuf:
+                    pages.append(' '.join(sbuf))
+                    sbuf, sbuf_words = [s], sw
+                else:
+                    sbuf.append(s)
+                    sbuf_words += sw
+            if sbuf:
+                buf, buf_words = [' '.join(sbuf)], sbuf_words
+    if buf:
+        pages.append('\n\n'.join(buf))
+    return pages
+
+
+def load_source_pages(book_id):
+    p = SOURCES_DIR / f"{book_id}.json"
+    if p.exists():
+        return json.loads(p.read_text(encoding='utf-8'))['pages']
+    # Legacy fallback — books from before chunking stored a single text blob.
+    legacy = SOURCES_DIR / f"{book_id}.txt"
+    if legacy.exists():
+        return split_pages(legacy.read_text(encoding='utf-8'))
+    raise FileNotFoundError(f"No source for book {book_id}")
+
+
+def save_source_pages(book_id, pages):
+    (SOURCES_DIR / f"{book_id}.json").write_text(
+        json.dumps({"pages": pages}, ensure_ascii=False), encoding='utf-8'
+    )
+
+
 def _split_phoneme_string(p):
     """Split a phoneme string on word boundaries so no chunk exceeds MAX_PHONEME_CHARS."""
     if len(p) <= MAX_PHONEME_CHARS:
@@ -525,27 +628,59 @@ def update_calibration(conn, word_count, elapsed):
 
 # ---------- background processing ----------
 
-def process_book(book_id, voice):
-    try:
-        text = (SOURCES_DIR / f"{book_id}.txt").read_text(encoding='utf-8')
-        t0   = time.time()
-        with _synthesis_lock:
-            audio, words = synthesize(text, voice)
-        elapsed = time.time() - t0
-        total_duration = words[-1]["end"] if words else 0.0
-        word_count = len(text.split())
-        print(f"[book {book_id}] synthesized {word_count} words / {total_duration:.1f}s audio in {elapsed:.1f}s real time ({total_duration/elapsed:.1f}x RTF)")
+def process_book(book_id, voice, start_page, end_page, append):
+    """Synthesize source pages [start_page, end_page) into audio.
 
-        (AUDIO_DIR / f"{book_id}.mp3").write_bytes(audio)
-        (SYNC_DIR  / f"{book_id}.json").write_text(json.dumps({"words": words}))
+    append=False: overwrite audio.mp3 and sync.json (fresh upload or regenerate).
+    append=True:  concatenate new MP3 bytes onto existing audio.mp3, and append
+                  new word timings (shifted by current audio duration) onto sync.json.
+    """
+    try:
+        pages = load_source_pages(book_id)
+        end_page = min(end_page, len(pages))
+        chunk_text = '\n\n'.join(pages[start_page:end_page])
+        if not chunk_text.strip():
+            raise Exception("Empty chunk — nothing to synthesize")
+
+        t0 = time.time()
+        with _synthesis_lock:
+            audio_bytes, new_words = synthesize(chunk_text, voice)
+        elapsed = time.time() - t0
+        new_dur = new_words[-1]["end"] if new_words else 0.0
+        chunk_word_count = len(chunk_text.split())
+        print(f"[book {book_id}] pages {start_page+1}-{end_page}: "
+              f"{chunk_word_count} words / {new_dur:.1f}s audio "
+              f"in {elapsed:.1f}s real time ({new_dur/elapsed:.1f}x RTF)")
+
+        audio_path = AUDIO_DIR / f"{book_id}.mp3"
+        sync_path  = SYNC_DIR  / f"{book_id}.json"
+
+        if append and audio_path.exists():
+            existing_sync = json.loads(sync_path.read_text(encoding='utf-8'))
+            offset = existing_sync["words"][-1]["end"] if existing_sync["words"] else 0.0
+            shifted = [{"word": w["word"],
+                        "start": w["start"] + offset,
+                        "end":   w["end"]   + offset} for w in new_words]
+            audio_path.write_bytes(audio_path.read_bytes() + audio_bytes)
+            existing_sync["words"].extend(shifted)
+            sync_path.write_text(json.dumps(existing_sync), encoding='utf-8')
+            total_duration = (existing_sync["words"][-1]["end"]
+                              if existing_sync["words"] else 0.0)
+            total_word_count = len(existing_sync["words"])
+        else:
+            audio_path.write_bytes(audio_bytes)
+            sync_path.write_text(json.dumps({"words": new_words}), encoding='utf-8')
+            total_duration   = new_dur
+            total_word_count = len(new_words)
 
         with db() as conn:
             conn.execute(
-                "UPDATE books SET status='ready', total_duration=?, "
-                "eta_seconds=NULL, processing_started_at=NULL, error=NULL WHERE id=?",
-                (total_duration, book_id)
+                "UPDATE books SET status='ready', total_duration=?, word_count=?, "
+                "pages_synthesized=?, eta_seconds=NULL, processing_started_at=NULL, "
+                "error=NULL WHERE id=?",
+                (total_duration, total_word_count, end_page, book_id)
             )
-            update_calibration(conn, len(text.split()), elapsed)
+            update_calibration(conn, chunk_word_count, elapsed)
     except Exception as e:
         traceback.print_exc()
         with db() as conn:
@@ -602,22 +737,31 @@ def create_book():
     if not text.strip():
         return jsonify({"error": "Empty document"}), 400
 
-    word_count = len(text.split())
+    text = filter_non_english(text)
+    if not text.strip():
+        return jsonify({"error": "Document has no English content"}), 400
+
+    pages = split_pages(text)
+    total_pages = len(pages)
+    end_page = min(INITIAL_CHUNK_PAGES, total_pages)
+    chunk_words = sum(len(p.split()) for p in pages[:end_page])
 
     with db() as conn:
         sec_per_word = get_sec_per_word(conn)
-        eta = word_count * sec_per_word
+        eta = chunk_words * sec_per_word
         cur = conn.execute(
             "INSERT INTO books(title, source_format, voice, word_count, eta_seconds, "
-            "status, processing_started_at, created_at) "
-            "VALUES (?,?,?,?,?,'processing',?,datetime('now'))",
-            (name, ext.lstrip('.'), voice, word_count, eta, time.time())
+            "status, processing_started_at, total_pages, pages_synthesized, created_at) "
+            "VALUES (?,?,?,?,?,'processing',?,?,0,datetime('now'))",
+            (name, ext.lstrip('.'), voice, chunk_words, eta, time.time(), total_pages)
         )
         book_id = cur.lastrowid
         row = dict(conn.execute("SELECT * FROM books WHERE id=?", (book_id,)).fetchone())
 
-    (SOURCES_DIR / f"{book_id}.txt").write_text(text, encoding='utf-8')
-    threading.Thread(target=process_book, args=(book_id, voice), daemon=True).start()
+    save_source_pages(book_id, pages)
+    threading.Thread(
+        target=process_book, args=(book_id, voice, 0, end_page, False), daemon=True
+    ).start()
     return jsonify(row)
 
 
@@ -669,13 +813,19 @@ def delete_book(book_id):
     with db() as conn:
         conn.execute("DELETE FROM books WHERE id=?", (book_id,))
     for p in (
-        AUDIO_DIR  / f"{book_id}.mp3",
-        SYNC_DIR   / f"{book_id}.json",
-        SOURCES_DIR / f"{book_id}.txt",
+        AUDIO_DIR   / f"{book_id}.mp3",
+        SYNC_DIR    / f"{book_id}.json",
+        SOURCES_DIR / f"{book_id}.json",
+        SOURCES_DIR / f"{book_id}.txt",   # legacy
     ):
         if p.exists():
             p.unlink()
     return jsonify({"ok": True})
+
+
+def _source_available(book_id):
+    return ((SOURCES_DIR / f"{book_id}.json").exists()
+            or (SOURCES_DIR / f"{book_id}.txt").exists())
 
 
 @app.route('/api/books/<int:book_id>/regenerate', methods=['POST'])
@@ -684,23 +834,77 @@ def regenerate(book_id):
     voice = data.get('voice')
     if voice not in VOICES:
         return jsonify({"error": "Unknown voice"}), 400
-    if not (SOURCES_DIR / f"{book_id}.txt").exists():
+    if not _source_available(book_id):
         return jsonify({"error": "Source not available"}), 404
 
     with db() as conn:
         row = conn.execute("SELECT * FROM books WHERE id=?", (book_id,)).fetchone()
         if not row:
             return jsonify({"error": "Not found"}), 404
+        # Re-synthesize whatever was already synthesized — same scope, new voice.
+        # For legacy books missing pages_synthesized, fall back to "all pages".
+        end_page = row['pages_synthesized'] or row['total_pages'] or 0
+        if end_page <= 0:
+            return jsonify({"error": "Book has no synthesized pages"}), 400
+
+        pages = load_source_pages(book_id)
+        chunk_words = sum(len(p.split()) for p in pages[:end_page])
         sec_per_word = get_sec_per_word(conn)
-        eta = (row['word_count'] or 0) * sec_per_word
+        eta = chunk_words * sec_per_word
         conn.execute(
             "UPDATE books SET voice=?, status='processing', eta_seconds=?, "
-            "processing_started_at=?, error=NULL WHERE id=?",
-            (voice, eta, time.time(), book_id)
+            "processing_started_at=?, word_count=?, pages_synthesized=0, error=NULL "
+            "WHERE id=?",
+            (voice, eta, time.time(), chunk_words, book_id)
         )
         row = dict(conn.execute("SELECT * FROM books WHERE id=?", (book_id,)).fetchone())
 
-    threading.Thread(target=process_book, args=(book_id, voice), daemon=True).start()
+    threading.Thread(
+        target=process_book, args=(book_id, voice, 0, end_page, False), daemon=True
+    ).start()
+    return jsonify(row)
+
+
+@app.route('/api/books/<int:book_id>/extend', methods=['POST'])
+def extend_book(book_id):
+    data  = request.get_json(silent=True) or {}
+    try:
+        count = int(data.get('count', 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "count must be an integer"}), 400
+    if count < 1:
+        return jsonify({"error": "count must be >= 1"}), 400
+    count = min(count, MAX_CHUNK_PAGES)
+    if not _source_available(book_id):
+        return jsonify({"error": "Source not available"}), 404
+
+    with db() as conn:
+        row = conn.execute("SELECT * FROM books WHERE id=?", (book_id,)).fetchone()
+        if not row:
+            return jsonify({"error": "Not found"}), 404
+        if row['status'] == 'processing':
+            return jsonify({"error": "Book is still processing"}), 409
+        start_page  = row['pages_synthesized'] or 0
+        total_pages = row['total_pages'] or 0
+        if start_page >= total_pages:
+            return jsonify({"error": "No more pages to convert"}), 400
+        end_page = min(start_page + count, total_pages)
+
+        pages = load_source_pages(book_id)
+        chunk_words  = sum(len(p.split()) for p in pages[start_page:end_page])
+        sec_per_word = get_sec_per_word(conn)
+        eta = chunk_words * sec_per_word
+        conn.execute(
+            "UPDATE books SET status='processing', eta_seconds=?, "
+            "processing_started_at=?, error=NULL WHERE id=?",
+            (eta, time.time(), book_id)
+        )
+        row = dict(conn.execute("SELECT * FROM books WHERE id=?", (book_id,)).fetchone())
+
+    voice = row['voice']
+    threading.Thread(
+        target=process_book, args=(book_id, voice, start_page, end_page, True), daemon=True
+    ).start()
     return jsonify(row)
 
 
