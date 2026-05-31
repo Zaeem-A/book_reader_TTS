@@ -231,6 +231,166 @@
             overflow-y: auto;
             padding: 4px 20px 20px;
         }
+        .vp-lang-header {
+            font-size: 0.72rem;
+            color: var(--text-faint);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 18px 0 6px;
+        }
+        .vp-lang-header:first-child { padding-top: 2px; }
+        .voice-delete {
+            background: none;
+            border: none;
+            color: var(--text-faint);
+            font-size: 1.2rem;
+            line-height: 1;
+            padding: 4px 6px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .voice-delete:hover { color: var(--danger); }
+        .clone-box {
+            background: var(--surface);
+            border: 1.5px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 10px;
+        }
+        .clone-hint {
+            font-size: 0.78rem;
+            color: var(--text-dim);
+            margin: 0 0 12px;
+            line-height: 1.5;
+        }
+        .clone-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .clone-input {
+            flex: 1;
+            background: var(--surface-2);
+            border: 1px solid var(--border-strong);
+            border-radius: 8px;
+            color: var(--text);
+            padding: 8px 12px;
+            font-size: 0.9rem;
+        }
+        .clone-input:focus { outline: none; border-color: var(--accent); }
+        .clone-file-btn {
+            background: var(--surface-2);
+            border: 1px solid var(--border-strong);
+            border-radius: 8px;
+            color: var(--text-dim);
+            padding: 8px 12px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .clone-file-btn:hover { border-color: var(--accent); color: var(--text); }
+        .clone-filename {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+            min-height: 1em;
+        }
+        .clone-submit {
+            background: var(--accent);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            padding: 9px 18px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            width: 100%;
+        }
+        .clone-submit:hover { opacity: 0.88; }
+
+        .personality-box {
+            background: var(--surface);
+            border: 1.5px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 16px 16px;
+            margin-bottom: 14px;
+        }
+        .preset-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .preset-btn {
+            flex: 1;
+            background: var(--surface-2);
+            border: 1.5px solid var(--border-strong);
+            border-radius: 8px;
+            color: var(--text-dim);
+            padding: 8px 10px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            font-family: inherit;
+            transition: border-color 0.12s, color 0.12s, background 0.12s;
+        }
+        .preset-btn:hover { color: var(--text); }
+        .preset-btn.active {
+            border-color: var(--accent);
+            background: var(--accent-soft);
+            color: var(--text);
+        }
+        .advanced-toggle {
+            display: inline-block;
+            margin-top: 10px;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            cursor: pointer;
+            user-select: none;
+        }
+        .advanced-toggle:hover { color: var(--text); }
+        .sliders { display: none; margin-top: 8px; }
+        .sliders.open { display: block; }
+        .slider-row {
+            display: grid;
+            grid-template-columns: 100px 1fr 32px;
+            align-items: center;
+            gap: 10px;
+            margin-top: 6px;
+        }
+        .slider-label {
+            font-size: 0.78rem;
+            color: var(--text-dim);
+        }
+        .slider-value {
+            font-size: 0.78rem;
+            color: var(--text);
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 4px;
+            background: var(--border-strong);
+            border-radius: 2px;
+            outline: none;
+        }
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+        }
+        .slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent);
+            border: none;
+            cursor: pointer;
+        }
 
         .voice-card {
             background: var(--surface);
@@ -391,6 +551,11 @@
         .word.active {
             background: var(--highlight-bg);
             color: var(--highlight);
+        }
+        body.fast-read .word.active .word-mid {
+            color: #ff1a1a;
+            font-weight: 700;
+            text-shadow: 0 0 6px rgba(255, 26, 26, 0.55);
         }
 
         .page-nav {
@@ -608,16 +773,10 @@
 
     <script>
         // ---------- voice metadata ----------
-        const VOICE_META = {
-            "af_heart":   {name: "Heart",   desc: "American  •  Female"},
-            "af_bella":   {name: "Bella",   desc: "American  •  Female"},
-            "af_nicole":  {name: "Nicole",  desc: "American  •  Female"},
-            "af_sarah":   {name: "Sarah",   desc: "American  •  Female"},
-            "am_adam":    {name: "Adam",    desc: "American  •  Male"},
-            "am_michael": {name: "Michael", desc: "American  •  Male"},
-            "bf_emma":    {name: "Emma",    desc: "British  •  Female"},
-            "bm_george":  {name: "George",  desc: "British  •  Male"},
-        };
+        function voiceMeta(id) {
+            if (id === 'default') return {name: 'Default', desc: 'Chatterbox built-in voice'};
+            return {name: id.charAt(0).toUpperCase() + id.slice(1), desc: 'Cloned voice'};
+        }
 
         // ---------- helpers ----------
         function fmt(s) {
@@ -684,7 +843,7 @@
                 return;
             }
             body.innerHTML = books.map(b => {
-                const voice = VOICE_META[b.voice]?.name || b.voice;
+                const voice = voiceMeta(b.voice).name;
                 if (b.status === 'processing') {
                     const pct = (tileProgress(b) * 100).toFixed(0);
                     const rem = tileRemaining(b);
@@ -882,10 +1041,33 @@
         // ---------- voice picker ----------
         let vpState = null;
 
+        const PERSONALITY_PRESETS = {
+            calm:     {exaggeration: 0.4,  cfg_weight: 0.6},
+            natural:  {exaggeration: 0.5,  cfg_weight: 0.5},
+            dramatic: {exaggeration: 0.75, cfg_weight: 0.4},
+        };
+
+        function matchPreset(exag, cfg) {
+            for (const [name, p] of Object.entries(PERSONALITY_PRESETS)) {
+                if (Math.abs(exag - p.exaggeration) < 0.01 && Math.abs(cfg - p.cfg_weight) < 0.01) {
+                    return name;
+                }
+            }
+            return null;
+        }
+
         async function openVoicePicker(state) {
             vpState = state;
             // pre-select something sensible
             state.selected = state.currentVoice || null;
+            // personality: copy from book in change mode, else default
+            if (state.mode === 'change' && state.book) {
+                state.exaggeration = (state.book.exaggeration != null) ? state.book.exaggeration : 0.5;
+                state.cfg_weight   = (state.book.cfg_weight   != null) ? state.book.cfg_weight   : 0.5;
+            } else {
+                state.exaggeration = 0.5;
+                state.cfg_weight   = 0.5;
+            }
             stopSample();
 
             document.getElementById('vpTitle').textContent =
@@ -906,25 +1088,125 @@
 
         function renderVoicePicker() {
             const body = document.getElementById('vpBody');
-            body.innerHTML = voices.map(v => {
-                const meta = VOICE_META[v.id] || {name: v.id, desc: ''};
+            let html = '';
+            voices.forEach(v => {
+                const meta = voiceMeta(v.id);
                 const used = v.count > 0;
                 const selected = vpState.selected === v.id;
-                let badge = '';
-                if (used) {
-                    badge = `<div class="voice-badge">USED IN ${v.count} BOOK${v.count === 1 ? '' : 'S'}</div>`;
-                }
-                return `
+                const isClone = v.id !== 'default';
+                const badge = used
+                    ? `<div class="voice-badge">USED IN ${v.count} BOOK${v.count === 1 ? '' : 'S'}</div>` : '';
+                const delBtn = isClone
+                    ? `<button class="voice-delete" data-action="delete" title="Remove voice">&times;</button>` : '';
+                html += `
                 <div class="voice-card ${used ? 'used' : ''} ${selected ? 'selected' : ''}" data-voice="${v.id}">
-                    <button class="voice-play" data-action="play">▶</button>
+                    <button class="voice-play" data-action="play">&#9654;</button>
                     <div class="voice-info">
                         <div class="voice-name">${meta.name}</div>
                         <div class="voice-desc">${meta.desc}</div>
                         ${badge}
                     </div>
+                    ${delBtn}
                     <div class="voice-radio"></div>
                 </div>`;
-            }).join('');
+            });
+            // Personality controls
+            const activePreset = matchPreset(vpState.exaggeration, vpState.cfg_weight);
+            html += `
+            <div class="vp-lang-header" style="margin-top:8px">Personality</div>
+            <div class="personality-box">
+                <div class="preset-row">
+                    <button class="preset-btn ${activePreset==='calm'?'active':''}"     data-preset="calm">Calm</button>
+                    <button class="preset-btn ${activePreset==='natural'?'active':''}"  data-preset="natural">Natural</button>
+                    <button class="preset-btn ${activePreset==='dramatic'?'active':''}" data-preset="dramatic">Dramatic</button>
+                </div>
+                <span class="advanced-toggle" id="advancedToggle">Advanced ▾</span>
+                <div class="sliders" id="advancedSliders">
+                    <div class="slider-row">
+                        <span class="slider-label">Expressivity</span>
+                        <input type="range" id="exagSlider" class="slider" min="0" max="1" step="0.05" value="${vpState.exaggeration}">
+                        <span class="slider-value" id="exagValue">${vpState.exaggeration.toFixed(2)}</span>
+                    </div>
+                    <div class="slider-row">
+                        <span class="slider-label">Pacing</span>
+                        <input type="range" id="cfgSlider" class="slider" min="0" max="1" step="0.05" value="${vpState.cfg_weight}">
+                        <span class="slider-value" id="cfgValue">${vpState.cfg_weight.toFixed(2)}</span>
+                    </div>
+                </div>
+            </div>`;
+
+            // Clone upload section
+            html += `
+            <div class="vp-lang-header" style="margin-top:8px">Clone a voice</div>
+            <div class="clone-box">
+                <p class="clone-hint">Upload a clean 5–30 second WAV clip of any voice and Chatterbox will clone it.</p>
+                <div class="clone-row">
+                    <input type="text" id="cloneName" placeholder="Voice name" class="clone-input" maxlength="32">
+                    <label class="clone-file-btn">
+                        Choose WAV
+                        <input type="file" id="cloneFile" accept=".wav" style="display:none">
+                    </label>
+                </div>
+                <div id="cloneFileName" class="clone-filename"></div>
+                <button class="clone-submit" id="cloneSubmit">Add voice</button>
+            </div>`;
+            body.innerHTML = html;
+
+            // Personality handlers
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                btn.onclick = () => {
+                    const p = PERSONALITY_PRESETS[btn.dataset.preset];
+                    vpState.exaggeration = p.exaggeration;
+                    vpState.cfg_weight   = p.cfg_weight;
+                    document.getElementById('exagSlider').value = p.exaggeration;
+                    document.getElementById('cfgSlider').value  = p.cfg_weight;
+                    document.getElementById('exagValue').textContent = p.exaggeration.toFixed(2);
+                    document.getElementById('cfgValue').textContent  = p.cfg_weight.toFixed(2);
+                    document.querySelectorAll('.preset-btn').forEach(b =>
+                        b.classList.toggle('active', b === btn));
+                    stopSample();
+                };
+            });
+            document.getElementById('advancedToggle').onclick = () => {
+                document.getElementById('advancedSliders').classList.toggle('open');
+            };
+            const refreshPresetHighlight = () => {
+                const cur = matchPreset(vpState.exaggeration, vpState.cfg_weight);
+                document.querySelectorAll('.preset-btn').forEach(b =>
+                    b.classList.toggle('active', b.dataset.preset === cur));
+            };
+            document.getElementById('exagSlider').oninput = e => {
+                vpState.exaggeration = parseFloat(e.target.value);
+                document.getElementById('exagValue').textContent = vpState.exaggeration.toFixed(2);
+                refreshPresetHighlight();
+                stopSample();
+            };
+            document.getElementById('cfgSlider').oninput = e => {
+                vpState.cfg_weight = parseFloat(e.target.value);
+                document.getElementById('cfgValue').textContent = vpState.cfg_weight.toFixed(2);
+                refreshPresetHighlight();
+                stopSample();
+            };
+
+            document.getElementById('cloneFile').onchange = e => {
+                const f = e.target.files[0];
+                document.getElementById('cloneFileName').textContent = f ? f.name : '';
+            };
+            document.getElementById('cloneSubmit').onclick = async () => {
+                const name = (document.getElementById('cloneName').value || '').trim();
+                const file = document.getElementById('cloneFile').files[0];
+                if (!name) { alert('Enter a name for the voice.'); return; }
+                if (!file) { alert('Choose a WAV file.'); return; }
+                const fd = new FormData();
+                fd.append('name', name);
+                fd.append('file', file);
+                try {
+                    await fetch('/api/voices/upload', {method: 'POST', body: fd});
+                    voices = await api('/api/voices');
+                    renderVoicePicker();
+                } catch (e) { alert('Upload failed: ' + e); }
+            };
+
             updateVpFooter();
         }
 
@@ -954,7 +1236,7 @@
             }
         }
 
-        document.getElementById('vpBody').addEventListener('click', e => {
+        document.getElementById('vpBody').addEventListener('click', async e => {
             const card = e.target.closest('.voice-card');
             if (!card) return;
             const voice = card.dataset.voice;
@@ -962,8 +1244,17 @@
                 playSample(voice, card);
                 return;
             }
+            if (e.target.closest('[data-action="delete"]')) {
+                if (!confirm(`Remove voice "${voice}"?`)) return;
+                try {
+                    await api(`/api/voices/${voice}`, {method: 'DELETE'});
+                    voices = await api('/api/voices');
+                    if (vpState.selected === voice) vpState.selected = 'default';
+                    renderVoicePicker();
+                } catch (err) { alert(err); }
+                return;
+            }
             vpState.selected = voice;
-            // update selection visually
             document.querySelectorAll('.voice-card').forEach(c =>
                 c.classList.toggle('selected', c.dataset.voice === voice));
             updateVpFooter();
@@ -983,6 +1274,8 @@
                     const fd = new FormData();
                     fd.append('file', vpState.file);
                     fd.append('voice', voice);
+                    fd.append('exaggeration', vpState.exaggeration);
+                    fd.append('cfg_weight',   vpState.cfg_weight);
                     const res = await fetch('/api/books', {method: 'POST', body: fd});
                     if (!res.ok) {
                         const j = await res.json().catch(() => ({}));
@@ -992,7 +1285,11 @@
                     await api(`/api/books/${vpState.book.id}/regenerate`, {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({voice}),
+                        body: JSON.stringify({
+                            voice,
+                            exaggeration: vpState.exaggeration,
+                            cfg_weight:   vpState.cfg_weight,
+                        }),
                     });
                 }
                 showView('library');
@@ -1011,7 +1308,10 @@
                 return;
             }
             stopSample();
-            sampleAudio.src = `/api/voices/${voice}/sample`;
+            const qs = vpState
+                ? `?exaggeration=${vpState.exaggeration}&cfg_weight=${vpState.cfg_weight}`
+                : '';
+            sampleAudio.src = `/api/voices/${voice}/sample${qs}`;
             sampleAudio.play().catch(() => {});
             samplePlayingCard = card;
             card.classList.add('playing');
@@ -1050,6 +1350,7 @@
             document.getElementById('docTitle').textContent = currentBook.title;
             audio.src = `/api/books/${bookId}/audio`;
             audio.playbackRate = 1;
+            document.body.classList.remove('fast-read');
             document.querySelectorAll('.speed-btn').forEach(b =>
                 b.classList.toggle('active', b.dataset.speed === '1'));
 
@@ -1091,11 +1392,20 @@
             if (pages.length === 0) pages = [[]];
         }
 
+        function renderWordHtml(w) {
+            // Wrap the middle character in .word-mid so we can color it (e.g. red at 2×).
+            if (w.length <= 1) return `<span class="word-mid">${escapeHtml(w)}</span>`;
+            const m = Math.floor(w.length / 2);
+            return escapeHtml(w.slice(0, m))
+                + `<span class="word-mid">${escapeHtml(w.charAt(m))}</span>`
+                + escapeHtml(w.slice(m + 1));
+        }
+
         function renderPages() {
             const area = document.getElementById('readingArea');
             area.innerHTML = pages.map((idxs, pn) => `
                 <div class="page${pn === 0 ? ' current' : ''}" id="page-${pn}">
-                    ${idxs.map(i => `<span class="word" id="w${i}" data-i="${i}">${escapeHtml(words[i].word)} </span>`).join('')}
+                    ${idxs.map(i => `<span class="word" id="w${i}" data-i="${i}">${renderWordHtml(words[i].word)} </span>`).join('')}
                 </div>
             `).join('');
             currentPage = 0;
@@ -1174,7 +1484,9 @@
 
         document.querySelectorAll('.speed-btn').forEach(b => {
             b.onclick = () => {
-                audio.playbackRate = parseFloat(b.dataset.speed);
+                const s = parseFloat(b.dataset.speed);
+                audio.playbackRate = s;
+                document.body.classList.toggle('fast-read', s >= 2);
                 document.querySelectorAll('.speed-btn').forEach(x => x.classList.remove('active'));
                 b.classList.add('active');
             };
@@ -1187,7 +1499,7 @@
             audio.currentTime = ratio * (audio.duration || 0);
         };
 
-        audio.addEventListener('timeupdate', () => {
+        function updateHighlight() {
             const t = audio.currentTime;
             const dur = audio.duration || 0;
             if (dur) {
@@ -1196,8 +1508,7 @@
                 document.getElementById('timeDisplay').textContent =
                     fmt(t) + ' / ' + fmt(dur);
             }
-            // find active word — start from current to avoid full scan each tick
-            let idx = findWordAt(t);
+            const idx = findWordAt(t);
             if (idx !== currentIdx) {
                 if (currentIdx >= 0) {
                     document.getElementById('w' + currentIdx)?.classList.remove('active');
@@ -1211,7 +1522,22 @@
                 currentIdx = idx;
                 schedulePositionSave();
             }
+        }
+
+        // While playing, drive the highlighter from requestAnimationFrame (~60Hz)
+        // instead of the timeupdate event (~4Hz). Otherwise at 2× a single word
+        // can be shorter than one tick interval and gets skipped visually.
+        let highlightRafId = null;
+        function highlightLoop() {
+            if (audio.paused) { highlightRafId = null; return; }
+            updateHighlight();
+            highlightRafId = requestAnimationFrame(highlightLoop);
+        }
+        audio.addEventListener('play', () => {
+            if (highlightRafId == null) highlightRafId = requestAnimationFrame(highlightLoop);
         });
+        // timeupdate stays as a fallback (covers seek-while-paused).
+        audio.addEventListener('timeupdate', updateHighlight);
 
         function findWordAt(t) {
             // binary search by start time
